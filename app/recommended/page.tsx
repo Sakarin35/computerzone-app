@@ -1,4 +1,3 @@
-// /app/recommended/page.tsx
 "use client"
 
 import { useState, useMemo } from "react"
@@ -8,6 +7,12 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { componentOptions, type ComponentType } from "@/app/data/components"
 import { recommendedImages } from "../data/recommended-images"
 
+type ComponentInfo = {
+  name: string
+  price: number
+  description: string
+}
+
 const getRandomComponent = (type: ComponentType, excludeId?: string) => {
   const options = componentOptions[type].filter((c) => c.id !== excludeId)
   return options[Math.floor(Math.random() * options.length)]
@@ -16,24 +21,31 @@ const getRandomComponent = (type: ComponentType, excludeId?: string) => {
 const generateRecommendedBuilds = (selectedType: ComponentType, selectedId: string) => {
   const selectedComponent = componentOptions[selectedType].find((c) => c.id === selectedId)
 
-  if (!selectedComponent) {
-    return []
-  }
+  if (!selectedComponent) return []
 
   const builds = []
   for (let i = 0; i < 3; i++) {
-    const build = {
+    const specs: Record<ComponentType, ComponentInfo> = Object.fromEntries(
+      Object.keys(componentOptions).map((key) => {
+        const type = key as ComponentType
+        const component = type === selectedType ? selectedComponent : getRandomComponent(type)
+        return [
+          type,
+          {
+            name: component.name,
+            price: component.price,
+            description: component.description,
+          },
+        ]
+      }),
+    )  as Record<ComponentType, ComponentInfo>
+
+    builds.push({
       id: i + 1,
       name: `추천 PC ${i + 1}`,
       image: recommendedImages[`pc${i + 1}` as keyof typeof recommendedImages],
-      specs: Object.fromEntries(
-        Object.keys(componentOptions).map((key) => {
-          const type = key as ComponentType
-          return [type, type === selectedType ? selectedComponent : getRandomComponent(type)]
-        }),
-      ) as Record<ComponentType, typeof selectedComponent>,
-    }
-    builds.push(build)
+      specs,
+    })
   }
 
   return builds
@@ -62,14 +74,7 @@ export default function RecommendedBuilds() {
     if (selectedBuild !== null) {
       const selectedPc = recommendedBuilds.find((build) => build.id === selectedBuild)
       if (selectedPc) {
-        const components = Object.entries(selectedPc.specs).reduce(
-          (acc, [key, value]) => {
-            acc[key] = { name: value.name, price: value.price }
-            return acc
-          },
-          {} as Record<string, { name: string; price: number }>,
-        )
-        const componentsParam = encodeURIComponent(JSON.stringify(components))
+        const componentsParam = encodeURIComponent(JSON.stringify(selectedPc.specs))
         router.push(`/quote?components=${componentsParam}`)
       }
     }
@@ -83,7 +88,9 @@ export default function RecommendedBuilds() {
     <div className="min-h-screen bg-black text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h2 className="text-2xl font-bold mb-8">추천 PC</h2>
-        <p className="text-gray-400 mb-8">선택하신 부품을 포함한 추천 PC 구성입니다. 원하는 구성을 선택해 주세요.</p>
+        <p className="text-gray-400 mb-8">
+          선택하신 부품을 포함한 추천 PC 구성입니다. 원하는 구성을 선택해 주세요.
+        </p>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {recommendedBuilds.map((build) => (
@@ -106,14 +113,14 @@ export default function RecommendedBuilds() {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xl font-bold">{build.name}</h3>
                   <span className="text-xl font-bold">
-                    {Object.values(build.specs)
+                    {(Object.values(build.specs) as ComponentInfo[])
                       .reduce((sum, component) => sum + component.price, 0)
                       .toLocaleString()}
                     원
                   </span>
                 </div>
                 <div className="space-y-2 text-sm">
-                  {Object.entries(build.specs).map(([key, value]) => (
+                  {(Object.entries(build.specs) as [string, ComponentInfo][]).map(([key, value]) => (
                     <div key={key} className="flex justify-between">
                       <span className="font-medium text-gray-400">{key.toUpperCase()}:</span>
                       <span className="text-right ml-2">{value.name}</span>
@@ -137,4 +144,3 @@ export default function RecommendedBuilds() {
     </div>
   )
 }
-

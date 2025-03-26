@@ -1,10 +1,9 @@
-// /app/quote/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Minus, Plus, ArrowLeft, Save, Share, Trash, Edit } from "lucide-react"
+import { Minus, Plus, ArrowLeft, Save, Share, Trash, Edit, Camera } from "lucide-react"
 import { auth, db } from "../../lib/firebase"
 import {
   collection,
@@ -32,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+
 
 interface QuoteItem {
   category: string
@@ -63,12 +63,14 @@ export default function QuotePage() {
   const [items, setItems] = useState<QuoteItem[]>(() => {
     const paramsData = searchParams.get("components")
     if (paramsData) {
-      try {
-        // URI 디코딩 전에 유효성 검사 추가
+        try {
+        // 1단계: decodeURIComponent
         const decodedData = decodeURIComponent(paramsData)
-        if (!decodedData) return []
 
+        // 2단계: JSON 파싱
         const decoded = JSON.parse(decodedData)
+
+        // 3단계: map으로 변환
         return Object.entries(decoded).map(([category, component]: [string, any]) => ({
           category,
           name: component.name,
@@ -76,7 +78,7 @@ export default function QuotePage() {
           price: component.price,
         }))
       } catch (e) {
-        console.error("Failed to parse components data:", e)
+        console.error("🚨 Failed to parse components data:", e, "\nparamsData:", paramsData)
         return []
       }
     }
@@ -92,6 +94,9 @@ export default function QuotePage() {
   const [currentQuoteName, setCurrentQuoteName] = useState<string>("이름 없는 견적")
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [newQuoteName, setNewQuoteName] = useState<string>("")
+
+  // 견적서 요소에 대한 ref 추가
+  const quoteRef = useRef<HTMLDivElement>(null)
 
   // URL에서 견적서 ID 가져오기
   useEffect(() => {
@@ -321,6 +326,34 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
     setIsShareDialogOpen(false)
   }
 
+  // 견적서를 이미지로 저장하는 함수
+  const saveAsImage = async () => {
+    if (!quoteRef.current) return
+  
+    try {
+      const html2canvas = (await import("html2canvas")).default
+      const canvas = await html2canvas(quoteRef.current, {
+        scale: 2,
+        backgroundColor: "#111827",
+        logging: false,
+        useCORS: true,
+      })
+  
+      const image = canvas.toDataURL("image/png")
+      const downloadLink = document.createElement("a")
+      downloadLink.href = image
+      downloadLink.download = `${currentQuoteName || "PC견적서"}.png`
+      document.body.appendChild(downloadLink)
+      downloadLink.click()
+      document.body.removeChild(downloadLink)
+  
+      setIsSaveDialogOpen(false)
+    } catch (error) {
+      console.error("Error saving quote as image:", error)
+      alert("견적서 이미지 저장에 실패했습니다.")
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -355,7 +388,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-lg">
+        <div ref={quoteRef} className="bg-gray-900 rounded-lg">
           <div className="grid grid-cols-12 gap-4 p-4 text-sm font-medium text-gray-400 border-b border-gray-800">
             <div className="col-span-2">분류</div>
             <div className="col-span-5">상품명</div>
@@ -456,6 +489,10 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
+            <Button variant="outline" onClick={saveAsImage} className="flex items-center text-black">
+              <Camera className="h-4 w-4 mr-2 text-black" />
+              이미지 저장
+            </Button>
             <AlertDialogCancel className="text-black">취소</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
