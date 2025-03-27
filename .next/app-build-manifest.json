@@ -11,25 +11,30 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/select-type/page": [
+    "/auth/login/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/select-type/page.js"
+      "static/chunks/app/auth/login/page.js"
     ],
-    "/custom/page": [
+    "/mypage/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/custom/page.js"
+      "static/chunks/app/mypage/page.js"
+    ],
+    "/mypage/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/mypage/loading.js"
+    ],
+    "/saved-quotes/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/saved-quotes/page.js"
     ],
     "/quote/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/quote/page.js"
-    ],
-    "/recommended/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/recommended/page.js"
     ]
   }
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Minus, Plus, ArrowLeft, Save, Share, Trash, Edit, Camera } from "lucide-react"
-import { auth, db } from "../../lib/firebase"
+import { auth, db, storage } from "../../lib/firebase"
 import {
   collection,
   addDoc,
@@ -17,6 +17,7 @@ import {
   getDoc,
   serverTimestamp,
 } from "firebase/firestore"
+import { ref, uploadString, getDownloadURL } from "firebase/storage"
 import { useAuthState } from "react-firebase-hooks/auth"
 import {
   AlertDialog,
@@ -119,6 +120,7 @@ export default function QuotePage() {
   const [currentQuoteName, setCurrentQuoteName] = useState<string>("이름 없는 견적")
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [newQuoteName, setNewQuoteName] = useState<string>("")
+  const [isEmailSending, setIsEmailSending] = useState(false)
 
   // 견적서 요소에 대한 ref 추가
   const quoteRef = useRef<HTMLDivElement>(null)
@@ -332,25 +334,54 @@ export default function QuotePage() {
       return
     }
 
-    const subject = encodeURIComponent("PC 견적 공유")
-    const body = encodeURIComponent(`
-견적서 이름: ${currentQuoteName}
+    try {
+      setIsEmailSending(true)
 
-PC 견적 정보:
+      // 견적서를 이미지로 변환
+      if (!quoteRef.current) return
 
-${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.name} - ${item.quantity}개 - ${(item.price * item.quantity).toLocaleString()}원`).join("\n")}
+      const html2canvas = (await import("html2canvas")).default
+      const canvas = await html2canvas(quoteRef.current, {
+        scale: 2,
+        backgroundColor: "#111827",
+        logging: false,
+        useCORS: true,
+      })
 
-총 예상금액: ${totalPrice.toLocaleString()}원
-    `)
+      // 이미지를 Base64 문자열로 변환
+      const imageData = canvas.toDataURL("image/png")
 
-    // 실제 이메일 전송 로직을 여기에 구현해야 합니다.
-    // 현재는 시뮬레이션만 합니다.
-    console.log(`Sending email to: ${user.email}`)
-    console.log(`Subject: ${subject}`)
-    console.log(`Body: ${body}`)
+      // Firebase Storage에 이미지 업로드
+      const storageRef = ref(storage, `quotes/${user.uid}/${Date.now()}.png`)
+      await uploadString(storageRef, imageData, "data_url")
 
-    alert(`견적서가 ${user.email}로 전송되었습니다.`)
-    setIsShareDialogOpen(false)
+      // 업로드된 이미지의 URL 가져오기
+      const imageUrl = await getDownloadURL(storageRef)
+
+      // Firestore에 이메일 전송 기록 저장
+      await addDoc(collection(db, "emails"), {
+        to: user.email,
+        imageUrl,
+        quoteName: currentQuoteName,
+        totalPrice,
+        items: items.map((item) => ({
+          category: categoryNames[item.category] || item.category,
+          name: getDisplayNameFromModelId(item.name),
+          quantity: item.quantity,
+          price: item.price * item.quantity,
+        })),
+        sentAt: serverTimestamp(),
+        status: "pending",
+      })
+
+      setIsEmailSending(false)
+      alert(`견적서가 ${user.email}로 전송되었습니다.`)
+      setIsShareDialogOpen(false)
+    } catch (error) {
+      console.error("이메일 전송 오류:", error)
+      setIsEmailSending(false)
+      alert("이메일 전송에 실패했습니다.")
+    }
   }
 
   // 견적서를 이미지로 저장하는 함수
@@ -558,12 +589,17 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
           <AlertDialogHeader>
             <AlertDialogTitle className="text-black">견적서 공유</AlertDialogTitle>
             <AlertDialogDescription>
-              현재 로그인한 이메일 주소({user?.email})로 견적서를 보내시겠습니까?
+              <div className="space-y-4">
+                <p>현재 로그인한 이메일 주소({user?.email})로 견적서 이미지를 보내시겠습니까?</p>
+                <p className="text-sm text-gray-500">견적서 이미지가 이메일에 첨부되어 전송됩니다.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="text-black">취소</AlertDialogCancel>
-            <AlertDialogAction onClick={sendEmail}>확인</AlertDialogAction>
+            <AlertDialogAction onClick={sendEmail} disabled={isEmailSending}>
+              {isEmailSending ? "전송 중..." : "이메일로 보내기"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -31,5 +31,5 @@ export async function isAdmin(uid: string): Promise<boolean> {
 }
 
 // 다른 필요한 관리자 기능들을 여기에 추가할 수 있습니다
-export { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, serverTimestamp }
+export { db, collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, serverTimestamp }
 
