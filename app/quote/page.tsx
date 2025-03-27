@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Minus, Plus, ArrowLeft, Save, Share, Trash, Edit, Camera } from "lucide-react"
@@ -31,7 +31,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-
+import { getDisplayNameFromModelId } from "../../lib/utils-quote"
 
 interface QuoteItem {
   category: string
@@ -63,20 +63,45 @@ export default function QuotePage() {
   const [items, setItems] = useState<QuoteItem[]>(() => {
     const paramsData = searchParams.get("components")
     if (paramsData) {
+      try {
+        // 1단계: 안전한 decodeURIComponent 처리
+        let decodedData
         try {
-        // 1단계: decodeURIComponent
-        const decodedData = decodeURIComponent(paramsData)
+          decodedData = decodeURIComponent(paramsData)
+        } catch (decodeError) {
+          console.error("URI 디코딩 오류:", decodeError)
+          // 특수 문자 처리를 위한 대체 방법
+          decodedData = paramsData.replace(/%(?![0-9A-Fa-f]{2})/g, "%25")
+          decodedData = decodeURIComponent(decodedData)
+        }
+
+        if (!decodedData) return []
 
         // 2단계: JSON 파싱
         const decoded = JSON.parse(decodedData)
 
-        // 3단계: map으로 변환
-        return Object.entries(decoded).map(([category, component]: [string, any]) => ({
-          category,
-          name: component.name,
-          quantity: 1,
-          price: component.price,
-        }))
+        // 3단계: 유효성 검사 후 map으로 변환
+        if (!decoded || typeof decoded !== "object") {
+          console.error("유효하지 않은 데이터 형식:", decoded)
+          return []
+        }
+
+        // 4단계: 안전한 변환
+        return Object.entries(decoded)
+          .map(([category, component]: [string, any]) => {
+            if (!component || typeof component !== "object") {
+              console.error(`유효하지 않은 컴포넌트 데이터 (${category}):`, component)
+              return null
+            }
+
+            return {
+              category,
+              name: component.name || "이름 없음",
+              quantity: 1,
+              price: Number.parseInt(component.price) || 0,
+            }
+          })
+          .filter(Boolean) as QuoteItem[]
       } catch (e) {
         console.error("🚨 Failed to parse components data:", e, "\nparamsData:", paramsData)
         return []
@@ -141,7 +166,9 @@ export default function QuotePage() {
     )
   }
 
-  const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const totalPrice = useMemo(() => {
+    return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  }, [items])
 
   const handleBack = () => {
     if (window.confirm("첫 페이지로 돌아가시겠습니까? 현재 견적 내용은 저장되지 않습니다.")) {
@@ -329,7 +356,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
   // 견적서를 이미지로 저장하는 함수
   const saveAsImage = async () => {
     if (!quoteRef.current) return
-  
+
     try {
       const html2canvas = (await import("html2canvas")).default
       const canvas = await html2canvas(quoteRef.current, {
@@ -338,7 +365,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
         logging: false,
         useCORS: true,
       })
-  
+
       const image = canvas.toDataURL("image/png")
       const downloadLink = document.createElement("a")
       downloadLink.href = image
@@ -346,7 +373,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
       document.body.appendChild(downloadLink)
       downloadLink.click()
       document.body.removeChild(downloadLink)
-  
+
       setIsSaveDialogOpen(false)
     } catch (error) {
       console.error("Error saving quote as image:", error)
@@ -402,7 +429,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
                 <div className="col-span-2 font-medium text-gray-300">
                   {categoryNames[item.category] || item.category}
                 </div>
-                <div className="col-span-5">{item.name}</div>
+                <div className="col-span-5">{getDisplayNameFromModelId(item.name)}</div>
                 <div className="col-span-3 flex justify-center items-center space-x-2">
                   <Button
                     variant="outline"
@@ -422,7 +449,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="col-span-2 text-right">{(item.price * item.quantity).toLocaleString()}원</div>
+                <div className="col-span-2 text-right">{Math.round(item.price * item.quantity).toLocaleString()}원</div>
               </div>
             ))}
           </div>
@@ -430,7 +457,7 @@ ${items.map((item) => `${categoryNames[item.category] || item.category}: ${item.
           <div className="p-4 border-t border-gray-800">
             <div className="flex justify-between items-center text-lg font-bold mb-4">
               <span>총 예상금액</span>
-              <span>{totalPrice.toLocaleString()}원</span>
+              <span>{Math.round(totalPrice).toLocaleString()}원</span>
             </div>
             <div className="flex justify-end"></div>
           </div>
