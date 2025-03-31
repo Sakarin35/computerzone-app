@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Minus, Plus, ArrowLeft, Save, Share, Trash, Edit, Camera } from "lucide-react"
-import { auth, db, storage } from "../../lib/firebase"
+import { auth, db } from "../../lib/firebase"
 import {
   collection,
   addDoc,
@@ -17,7 +17,6 @@ import {
   getDoc,
   serverTimestamp,
 } from "firebase/firestore"
-import { ref, uploadString, getDownloadURL } from "firebase/storage"
 import { useAuthState } from "react-firebase-hooks/auth"
 import {
   AlertDialog,
@@ -121,6 +120,7 @@ export default function QuotePage() {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [newQuoteName, setNewQuoteName] = useState<string>("")
   const [isEmailSending, setIsEmailSending] = useState(false)
+  const [emailSendError, setEmailSendError] = useState<string | null>(null)
 
   // 견적서 요소에 대한 ref 추가
   const quoteRef = useRef<HTMLDivElement>(null)
@@ -326,6 +326,56 @@ export default function QuotePage() {
       return
     }
     setIsShareDialogOpen(true)
+    setEmailSendError(null)
+  }
+
+  // 견적서를 이미지로 저장하는 함수
+  const saveAsImage = async () => {
+    if (!items.length) {
+      alert("견적 항목이 없습니다.")
+      return
+    }
+
+    try {
+      // 견적서 데이터 준비
+      const quoteData = {
+        quoteId: currentQuoteId, // Firebase에서 견적 정보를 가져오기 위한 ID
+        quoteName: currentQuoteName,
+        items: items.map((item) => ({
+          category: item.category,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        totalPrice,
+        userName: user?.displayName || undefined,
+        userEmail: user?.email || undefined,
+      }
+
+      // URL 파라미터로 전달하기 위해 데이터 인코딩
+      const encodedData = encodeURIComponent(JSON.stringify(quoteData))
+
+      // 새 창에서 견적서 열기 (작은 창으로 설정)
+      const width = 800
+      const height = 1000
+      const left = (window.screen.width - width) / 2
+      const top = (window.screen.height - height) / 2
+
+      const printWindow = window.open(
+        `/quote/print?data=${encodedData}`,
+        "_blank",
+        `width=${width},height=${height},left=${left},top=${top},toolbar=0,location=0,menubar=0,status=0,scrollbars=1`,
+      )
+
+      if (!printWindow) {
+        alert("팝업 창이 차단되었습니다. 팝업 차단을 해제해주세요.")
+      }
+
+      setIsSaveDialogOpen(false)
+    } catch (error) {
+      console.error("Error opening quote print view:", error)
+      alert("견적서 열기에 실패했습니다.")
+    }
   }
 
   const sendEmail = async () => {
@@ -336,6 +386,7 @@ export default function QuotePage() {
 
     try {
       setIsEmailSending(true)
+      setEmailSendError(null)
 
       // 견적서를 이미지로 변환
       if (!quoteRef.current) return
@@ -351,64 +402,53 @@ export default function QuotePage() {
       // 이미지를 Base64 문자열로 변환
       const imageData = canvas.toDataURL("image/png")
 
-      // Firebase Storage에 이미지 업로드
-      const storageRef = ref(storage, `quotes/${user.uid}/${Date.now()}.png`)
-      await uploadString(storageRef, imageData, "data_url")
+      // 이미지 업로드 대신 직접 API에 이미지 데이터 전송
+      setIsEmailSending(true)
+      try {
+        const response = await fetch("/api/send-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: user.email,
+            imageUrl: imageData, // Base64 이미지 데이터 직접 전송
+            quoteName: currentQuoteName,
+            totalPrice,
+            items: items.map((item) => ({
+              category: categoryNames[item.category] || item.category,
+              name: getDisplayNameFromModelId(item.name),
+              quantity: item.quantity,
+              price: item.price * item.quantity,
+            })),
+          }),
+        })
 
-      // 업로드된 이미지의 URL 가져오기
-      const imageUrl = await getDownloadURL(storageRef)
+        if (!response.ok) {
+          throw new Error(`서버 응답 오류: ${response.status}`)
+        }
 
-      // Firestore에 이메일 전송 기록 저장
-      await addDoc(collection(db, "emails"), {
-        to: user.email,
-        imageUrl,
-        quoteName: currentQuoteName,
-        totalPrice,
-        items: items.map((item) => ({
-          category: categoryNames[item.category] || item.category,
-          name: getDisplayNameFromModelId(item.name),
-          quantity: item.quantity,
-          price: item.price * item.quantity,
-        })),
-        sentAt: serverTimestamp(),
-        status: "pending",
-      })
+        const result = await response.json()
 
-      setIsEmailSending(false)
-      alert(`견적서가 ${user.email}로 전송되었습니다.`)
-      setIsShareDialogOpen(false)
+        if (result.success) {
+          alert(`견적서가 ${user.email}로 전송되었습니다.`)
+          setIsShareDialogOpen(false)
+        } else {
+          setEmailSendError(result.error || "이메일 전송에 실패했습니다.")
+        }
+      } catch (error) {
+        console.error("이메일 전송 오류:", error)
+        setEmailSendError(
+          "이메일 전송 중 오류가 발생했습니다: " + (error instanceof Error ? error.message : String(error)),
+        )
+      } finally {
+        setIsEmailSending(false)
+      }
     } catch (error) {
       console.error("이메일 전송 오류:", error)
+      setEmailSendError("이메일 전송 중 오류가 발생했습니다.")
+    } finally {
       setIsEmailSending(false)
-      alert("이메일 전송에 실패했습니다.")
-    }
-  }
-
-  // 견적서를 이미지로 저장하는 함수
-  const saveAsImage = async () => {
-    if (!quoteRef.current) return
-
-    try {
-      const html2canvas = (await import("html2canvas")).default
-      const canvas = await html2canvas(quoteRef.current, {
-        scale: 2,
-        backgroundColor: "#111827",
-        logging: false,
-        useCORS: true,
-      })
-
-      const image = canvas.toDataURL("image/png")
-      const downloadLink = document.createElement("a")
-      downloadLink.href = image
-      downloadLink.download = `${currentQuoteName || "PC견적서"}.png`
-      document.body.appendChild(downloadLink)
-      downloadLink.click()
-      document.body.removeChild(downloadLink)
-
-      setIsSaveDialogOpen(false)
-    } catch (error) {
-      console.error("Error saving quote as image:", error)
-      alert("견적서 이미지 저장에 실패했습니다.")
     }
   }
 
@@ -548,7 +588,7 @@ export default function QuotePage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <Button variant="outline" onClick={saveAsImage} className="flex items-center text-black">
-              <Camera className="h-4 w-4 mr-2 text-black" />
+              <Camera className="h-4 w-4 mr-2" />
               이미지 저장
             </Button>
             <AlertDialogCancel className="text-black">취소</AlertDialogCancel>
@@ -592,6 +632,11 @@ export default function QuotePage() {
               <div className="space-y-4">
                 <p>현재 로그인한 이메일 주소({user?.email})로 견적서 이미지를 보내시겠습니까?</p>
                 <p className="text-sm text-gray-500">견적서 이미지가 이메일에 첨부되어 전송됩니다.</p>
+                {emailSendError && (
+                  <div className="text-red-500 text-sm bg-red-50 p-3 rounded border border-red-200">
+                    {emailSendError}
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

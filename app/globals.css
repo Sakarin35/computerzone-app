@@ -75,3 +75,49 @@
   }
 }
 
+/* 인쇄 스타일 */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: white !important;
+  }
+
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* 이미지만 인쇄되도록 설정 */
+  img {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+}
+
+/* 견적서 숨김 클래스 */
+.hidden {
+  display: none !important;
+}
+
+/* 인쇄 전용 클래스 */
+.print-only {
+  display: none;
+}
+@media print {
+  .print-only {
+    display: block !important;
+  }
+}
+
