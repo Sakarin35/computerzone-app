@@ -26,6 +26,14 @@ export default function PrintQuote() {
     const fetchQuoteDetails = async () => {
       if (quoteData?.quoteId) {
         try {
+          // 이미 quoteData에 필요한 정보가 있으면 Firebase 호출 건너뛰기
+          if (quoteData.items && quoteData.quoteName && quoteData.totalPrice) {
+            console.log("Using quote data from URL parameters")
+            setIsLoading(false)
+            return
+          }
+
+          console.log("Fetching quote details from Firebase")
           const quoteDoc = await getDoc(doc(db, "quotes", quoteData.quoteId))
           if (quoteDoc.exists()) {
             const data = quoteDoc.data()
@@ -111,11 +119,11 @@ export default function PrintQuote() {
           }
           .print-only { display: none; }
         
-        /* 네비게이션 바 숨기기 */
-        nav, header, footer, .navbar {
-          display: none !important;
-        }
-      `}</style>
+          /* 네비게이션 바 숨기기 */
+          nav, header, footer, .navbar {
+            display: none !important;
+          }
+        `}</style>
       </div>
 
       <div className="flex flex-col items-center p-4 max-w-4xl mx-auto">
@@ -124,10 +132,10 @@ export default function PrintQuote() {
           style={{ maxWidth: "200px", right: "1rem" }}
         >
           <button onClick={handlePrint} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mr-2">
-            인쇄
+            인쇄하기
           </button>
           <button onClick={handleSaveImage} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-            다운로드
+            이미지로 저장
           </button>
         </div>
 

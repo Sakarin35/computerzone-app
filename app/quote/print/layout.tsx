@@ -10,7 +10,7 @@ export default function PrintLayout({
       <head>
         <style>{`
           /* 네비게이션 바 및 불필요한 UI 요소 숨기기 */
-          nav, header, footer {
+          nav, header, footer, .navbar {
             display: none !important;
           }
           body {
