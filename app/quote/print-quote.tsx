@@ -110,21 +110,29 @@ export default function PrintQuote() {
             .print-only { display: block !important; }
           }
           .print-only { display: none; }
-        `}</style>
+        
+        /* 네비게이션 바 숨기기 */
+        nav, header, footer, .navbar {
+          display: none !important;
+        }
+      `}</style>
       </div>
 
       <div className="flex flex-col items-center p-4 max-w-4xl mx-auto">
-        <div className="no-print flex justify-between w-full mb-4">
-          <button onClick={handlePrint} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-            인쇄하기
+        <div
+          className="no-print flex justify-between w-full mb-4 fixed top-4 right-4 z-50"
+          style={{ maxWidth: "200px", right: "1rem" }}
+        >
+          <button onClick={handlePrint} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mr-2">
+            인쇄
           </button>
           <button onClick={handleSaveImage} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-            이미지로 저장
+            다운로드
           </button>
         </div>
 
         {/* 실제 견적서 (직접 표시) */}
-        <div ref={quoteRef} className="bg-white shadow-md w-full">
+        <div ref={quoteRef} className="bg-white shadow-md w-full mt-16">
           <QuoteTemplate
             quoteId={quoteData.quoteId}
             quoteName={quoteData.quoteName}

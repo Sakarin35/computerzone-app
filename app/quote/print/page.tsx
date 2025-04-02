@@ -10,6 +10,10 @@ export const metadata = {
 
 // 레이아웃 없이 견적서만 표시
 export default function PrintQuotePage() {
-  return <PrintQuote />
+  return (
+    <div className="print-page">
+      <PrintQuote />
+    </div>
+  )
 }
 

@@ -121,3 +121,18 @@
   }
 }
 
+/* 인쇄 페이지에서 네비게이션 바 숨기기 */
+.print-page nav,
+.print-page header,
+.print-page footer,
+.print-page .navbar {
+  display: none !important;
+}
+
+/* 인쇄 전용 페이지 스타일 */
+.print-container {
+  padding: 0;
+  margin: 0;
+  background-color: white;
+}
+

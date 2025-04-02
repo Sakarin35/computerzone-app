@@ -388,22 +388,70 @@ export default function QuotePage() {
       setIsEmailSending(true)
       setEmailSendError(null)
 
-      // 견적서를 이미지로 변환
-      if (!quoteRef.current) return
+      // 견적서 데이터 준비
+      const quoteData = {
+        quoteId: currentQuoteId,
+        quoteName: currentQuoteName,
+        items: items.map((item) => ({
+          category: item.category,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        totalPrice,
+        userName: user?.displayName || undefined,
+        userEmail: user?.email || undefined,
+      }
 
+      // 견적서 이미지 생성을 위한 임시 div 생성
+      const tempDiv = document.createElement("div")
+      tempDiv.style.position = "absolute"
+      tempDiv.style.left = "-9999px"
+      tempDiv.style.top = "-9999px"
+      document.body.appendChild(tempDiv)
+
+      // QuoteTemplate 컴포넌트를 임시로 렌더링하기 위해 React DOM 사용
+      const ReactDOM = await import("react-dom/client")
+      const QuoteTemplate = (await import("@/components/quote-template")).default
+
+      // 임시 div에 QuoteTemplate 렌더링
+      const root = ReactDOM.createRoot(tempDiv)
+      root.render(
+        <div style={{ backgroundColor: "white", padding: "20px", width: "800px" }}>
+          <QuoteTemplate
+            quoteId={quoteData.quoteId || undefined}
+            quoteName={quoteData.quoteName}
+            items={quoteData.items}
+            totalPrice={quoteData.totalPrice}
+            userName={quoteData.userName}
+            userEmail={quoteData.userEmail}
+            createdAt={new Date()} // 현재 시간 사용
+          />
+        </div>,
+      )
+
+      // 렌더링이 완료될 때까지 잠시 대기
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // html2canvas로 이미지 캡처
       const html2canvas = (await import("html2canvas")).default
-      const canvas = await html2canvas(quoteRef.current, {
+      const canvas = await html2canvas(tempDiv.firstChild as HTMLElement, {
         scale: 2,
-        backgroundColor: "#111827",
+        backgroundColor: "#ffffff",
         logging: false,
         useCORS: true,
+        windowWidth: 800,
+        windowHeight: tempDiv.firstChild instanceof HTMLElement ? tempDiv.firstChild.scrollHeight : 1200,
       })
+
+      // 임시 요소 제거
+      root.unmount()
+      document.body.removeChild(tempDiv)
 
       // 이미지를 Base64 문자열로 변환
       const imageData = canvas.toDataURL("image/png")
 
       // 이미지 업로드 대신 직접 API에 이미지 데이터 전송
-      setIsEmailSending(true)
       try {
         const response = await fetch("/api/send-email", {
           method: "POST",
@@ -447,7 +495,6 @@ export default function QuotePage() {
     } catch (error) {
       console.error("이메일 전송 오류:", error)
       setEmailSendError("이메일 전송 중 오류가 발생했습니다.")
-    } finally {
       setIsEmailSending(false)
     }
   }
