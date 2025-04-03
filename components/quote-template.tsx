@@ -15,6 +15,7 @@ interface QuoteTemplateProps {
   userName?: string
   userEmail?: string
   createdAt?: Date | null
+  isSaved: boolean // 추가!
 }
 
 export default function QuoteTemplate({
@@ -78,9 +79,7 @@ export default function QuoteTemplate({
               </tr>
               <tr>
                 <td className="py-1 font-semibold">견적금액</td>
-                <td className="text-lg font-bold">
-                  {totalPrice.toLocaleString()}원 <span className="text-sm font-normal">(부가세포함)</span>
-                </td>
+                <td className="text-lg font-bold">{totalPrice.toLocaleString()}원</td>
               </tr>
             </tbody>
           </table>
@@ -90,10 +89,9 @@ export default function QuoteTemplate({
           <table className="w-full text-sm">
             <tbody>
               <tr>
-               
-              </tr>
-              <tr>
-            
+                <td colSpan={3} className="py-1 font-semibold">
+                  공급자
+                </td>
               </tr>
               <tr>
                 <td className="py-1 font-semibold">상호명</td>
@@ -106,12 +104,9 @@ export default function QuoteTemplate({
                 <td>경기도 포천시 호국로 1007</td>
               </tr>
               <tr>
-                
-              </tr>
-              <tr>
                 <td className="py-1 font-semibold">대표전화</td>
                 <td className="px-2">|</td>
-                <td>..............</td>
+                <td>.....................</td>
               </tr>
             </tbody>
           </table>
@@ -161,12 +156,11 @@ export default function QuoteTemplate({
       <div className="bg-gray-100 border border-gray-300 p-4 text-right mb-6">
         <span className="font-bold mr-4">총 견적금액</span>
         <span className="text-xl font-bold">{totalPrice.toLocaleString()}원</span>
-        <span className="text-sm ml-1">(부가세포함)</span>
       </div>
 
-      {/*  */}
+      {/* 푸터 */}
       <div className="text-center text-sm text-gray-500 mt-8">
-        <p>본 견적서는 컴퓨존에서 자동 생성된 문서입니다.</p>
+        <p>본 견적서는 컴퓨터존에서 생성된 문서입니다.</p>
         <p>문의사항: {"jongyoun2256@gmail.com"}</p>
       </div>
     </div>

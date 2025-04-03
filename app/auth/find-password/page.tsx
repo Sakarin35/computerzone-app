@@ -52,7 +52,7 @@ export default function FindPasswordPage() {
                 {email} 주소로 전송된 이메일의 안내에 따라 비밀번호를 재설정해주세요.
               </p>
               <Link href="/auth/login">
-                <Button className="bg-blue-500 hover:bg-blue-600 text-white">��그인 페이지로 이동</Button>
+                <Button className="bg-blue-500 hover:bg-blue-600 text-white">로그인 페이지로 이동</Button>
               </Link>
             </div>
           ) : (
