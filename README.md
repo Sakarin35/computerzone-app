@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with firebase/firestore 모듈 또는 해당형식 선언을 찾을 수 없습니[`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is a [Next.js](https://nextjs.org) project bootstrapped with firebase/firestore [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
 
