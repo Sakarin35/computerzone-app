@@ -119,7 +119,7 @@ export default function CustomBuild() {
       initial="hidden"
       animate="visible"
       variants={containerVariants}
-      className="min-h-screen bg-black text-white"
+      className="min-h-screen bg-black text-white custom-scrollbar-container"
     >
       {/* Top Navigation */}
       <motion.div variants={itemVariants} className="border-b border-gray-800">
@@ -269,7 +269,7 @@ export default function CustomBuild() {
 
           {/* Component options */}
           <motion.div variants={itemVariants} className="col-span-12 md:col-span-4">
-            <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+            <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
               <h2 className="text-xl font-bold mb-4">
                 {currentIndex + 1}. {componentNames[currentComponent]}
               </h2>
