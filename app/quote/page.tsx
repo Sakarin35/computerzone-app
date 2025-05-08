@@ -337,6 +337,13 @@ export default function QuotePage() {
     }
 
     try {
+      // 사용자 이름 가져오기 (displayName 우선 사용하고 "님" 추가)
+      const userName = user?.displayName
+        ? `${user.displayName} 님`
+        : user?.email
+          ? `${user.email.split("@")[0]} 님`
+          : undefined
+
       // 견적서 데이터 준비
       const quoteData = {
         quoteId: currentQuoteId, // Firebase에서 견적 정보를 가져오기 위한 ID
@@ -348,8 +355,10 @@ export default function QuotePage() {
           price: item.price,
         })),
         totalPrice,
-        userName: user?.displayName || undefined,
+        userName: userName,
         userEmail: user?.email || undefined,
+        createdAt: new Date().toISOString(), // 현재 시간을 ISO 문자열로 전달
+        isSaved: !!currentQuoteId, // 저장 여부 플래그 추가
       }
 
       // URL 파라미터로 전달하기 위해 데이터 인코딩
@@ -378,6 +387,7 @@ export default function QuotePage() {
     }
   }
 
+  // 사용자 이름 가져오기 로직 수정 - displayName 우선 사용
   const sendEmail = async () => {
     if (!user || !user.email) {
       alert("이메일 주소를 찾을 수 없습니다.")
@@ -387,6 +397,11 @@ export default function QuotePage() {
     try {
       setIsEmailSending(true)
       setEmailSendError(null)
+
+      // 사용자 이름 가져오기 (displayName 우선 사용하고 "님" 추가)
+      const userName = user.displayName ? `${user.displayName} 님` : `${user.email.split("@")[0]} 님`
+
+      // 나머지 코드는 그대로 유지...
 
       // 견적서 데이터 준비
       const quoteData = {
@@ -399,8 +414,8 @@ export default function QuotePage() {
           price: item.price,
         })),
         totalPrice,
-        userName: user?.displayName || undefined,
-        userEmail: user?.email || undefined,
+        userName: userName,
+        userEmail: user.email,
       }
 
       // 견적서 이미지 생성을 위한 임시 div 생성
@@ -426,6 +441,7 @@ export default function QuotePage() {
             userName={quoteData.userName}
             userEmail={quoteData.userEmail}
             createdAt={new Date()} // 현재 시간 사용
+            isSaved={!!quoteData.quoteId}
           />
         </div>,
       )
@@ -463,6 +479,7 @@ export default function QuotePage() {
             imageUrl: imageData, // Base64 이미지 데이터 직접 전송
             quoteName: currentQuoteName,
             totalPrice,
+            userName: userName, // 사용자 이름 추가
             items: items.map((item) => ({
               category: categoryNames[item.category] || item.category,
               name: getDisplayNameFromModelId(item.name),

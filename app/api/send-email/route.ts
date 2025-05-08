@@ -1,9 +1,10 @@
+// 이메일 전송 시 사용자 이름 처리 부분 수정
 import { NextResponse } from "next/server"
 import nodemailer from "nodemailer"
 
 export async function POST(request: Request) {
   try {
-    const { email, imageUrl, quoteName, totalPrice, items } = await request.json()
+    const { email, imageUrl, quoteName, totalPrice, items, userName } = await request.json()
 
     if (!email || !imageUrl) {
       return NextResponse.json({ error: "이메일과 이미지 URL이 필요합니다." }, { status: 400 })
@@ -48,6 +49,10 @@ export async function POST(request: Request) {
       })
     }
 
+    // 이메일 전송 시 사용자 이름 처리 부분 수정 - "님" 추가
+    // 사용자 이름 처리
+    const displayName = userName || `${email.split("@")[0]} 님` || "고객님"
+
     // 이메일 전송
     const info = await transporter.sendMail({
       from: `"PC 견적 서비스" <${process.env.EMAIL_USER}>`,
@@ -56,7 +61,7 @@ export async function POST(request: Request) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
           <h1 style="color: #333;">${quoteName}</h1>
-          <p>안녕하세요, 요청하신 PC 견적서를 보내드립니다.</p>
+          <p>안녕하세요 ${displayName}님, 요청하신 PC 견적서를 보내드립니다.</p>
           
           <p>견적서 이미지는 첨부파일로 보내드립니다.</p>
           

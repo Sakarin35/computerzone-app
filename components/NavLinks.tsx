@@ -1,8 +1,10 @@
+
 // components/NavLinks.tsx
 "use client"
 
 import Link from "next/link"
 import { useAuthState } from "react-firebase-hooks/auth"
+
 import { usePathname } from "next/navigation"
 import { auth } from "@/lib/firebase"
 
@@ -33,6 +35,7 @@ export function NavLinks() {
           저장된 견적
         </Link>
       )}
+
     </div>
   )
 }

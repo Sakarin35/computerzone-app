@@ -21,11 +21,37 @@ export default function PrintQuote() {
   const [createdAt, setCreatedAt] = useState<Date | null>(null)
   const [quoteDetails, setQuoteDetails] = useState<any>(null)
 
+  // 사용자 이름 가져오기 (이메일 사용자의 경우 이메일 앞부분 사용)
+  const getUserName = () => {
+    if (user) {
+      if (user.displayName) {
+        return `${user.displayName} 님` // 구글 로그인 등으로 displayName이 있는 경우 "님" 추가
+      } else if (user.email) {
+        return `${user.email.split("@")[0]} 님` // 이메일/비밀번호 로그인의 경우 이메일 앞부분 사용하고 "님" 추가
+      }
+    }
+    return quoteData?.userName || "비회원 고객님"
+  }
+
   // Firebase에서 견적 정보 가져오기
   useEffect(() => {
     const fetchQuoteDetails = async () => {
-      if (quoteData?.quoteId) {
+      if (quoteData) {
         try {
+          // URL 파라미터에서 createdAt 값이 있으면 사용
+          if (quoteData.createdAt) {
+            try {
+              // ISO 문자열이나 타임스탬프 숫자를 Date 객체로 변환
+              const createdAtDate = new Date(quoteData.createdAt)
+              if (!isNaN(createdAtDate.getTime())) {
+                setCreatedAt(createdAtDate)
+                console.log("Using createdAt from URL parameters:", createdAtDate)
+              }
+            } catch (error) {
+              console.error("Error parsing createdAt from URL:", error)
+            }
+          }
+
           // 이미 quoteData에 필요한 정보가 있으면 Firebase 호출 건너뛰기
           if (quoteData.items && quoteData.quoteName && quoteData.totalPrice) {
             console.log("Using quote data from URL parameters")
@@ -33,16 +59,19 @@ export default function PrintQuote() {
             return
           }
 
-          console.log("Fetching quote details from Firebase")
-          const quoteDoc = await getDoc(doc(db, "quotes", quoteData.quoteId))
-          if (quoteDoc.exists()) {
-            const data = quoteDoc.data()
-            setQuoteDetails(data)
+          // quoteId가 있고 필요한 정보가 URL에 없는 경우에만 Firebase에서 가져오기
+          if (quoteData.quoteId) {
+            console.log("Fetching quote details from Firebase")
+            const quoteDoc = await getDoc(doc(db, "quotes", quoteData.quoteId))
+            if (quoteDoc.exists()) {
+              const data = quoteDoc.data()
+              setQuoteDetails(data)
 
-            // Firestore Timestamp를 JavaScript Date로 변환
-            if (data.createdAt) {
-              const timestamp = data.createdAt as Timestamp
-              setCreatedAt(timestamp.toDate())
+              // Firestore Timestamp를 JavaScript Date로 변환 (URL에서 가져온 createdAt이 없는 경우에만)
+              if (data.createdAt && !createdAt) {
+                const timestamp = data.createdAt as Timestamp
+                setCreatedAt(timestamp.toDate())
+              }
             }
           }
         } catch (error) {
@@ -127,28 +156,35 @@ export default function PrintQuote() {
       </div>
 
       <div className="flex flex-col items-center p-4 max-w-4xl mx-auto">
-        <div
-          className="no-print flex justify-between w-full mb-4 fixed top-4 right-4 z-50"
-          style={{ maxWidth: "200px", right: "1rem" }}
-        >
-          <button onClick={handlePrint} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mr-2">
-            인쇄하기
-          </button>
-          <button onClick={handleSaveImage} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-            이미지로 저장
-          </button>
+        {/* 버튼을 하단 중앙에 배치 */}
+        <div className="no-print flex justify-center w-full fixed bottom-8 z-50">
+          <div className="flex space-x-4">
+            <button
+              onClick={handlePrint}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              인쇄하기
+            </button>
+            <button
+              onClick={handleSaveImage}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+            >
+              이미지로 저장
+            </button>
+          </div>
         </div>
 
         {/* 실제 견적서 (직접 표시) */}
-        <div ref={quoteRef} className="bg-white shadow-md w-full mt-16">
+        <div ref={quoteRef} className="bg-white shadow-md w-full mt-8 mb-24">
           <QuoteTemplate
             quoteId={quoteData.quoteId}
             quoteName={quoteData.quoteName}
             items={quoteData.items}
             totalPrice={quoteData.totalPrice}
-            userName={user?.displayName || quoteData.userName || "비회원 고객님"}
+            userName={getUserName()}
             userEmail={user?.email || quoteData.userEmail}
             createdAt={createdAt}
+            isSaved={!!quoteData.quoteId}
           />
         </div>
       </div>
