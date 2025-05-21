@@ -60,7 +60,7 @@ export async function fetchComponents(): Promise<Record<string, FirebaseComponen
 
     try {
       const itemsCollectionRef = collection(db, "crawled_components", categoryId, "items")
-      const itemsQuery = query(itemsCollectionRef, limit(10))
+      const itemsQuery = query(itemsCollectionRef, limit(300))
       const componentsSnapshot = await getDocs(itemsQuery)
 
       console.log(
