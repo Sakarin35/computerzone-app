@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",               // ✅ 바꾸기
+    "moduleResolution": "node",         // ✅ 바꾸기
+    "target": "es2017",
+    "esModuleInterop": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true
+  },
+  "compileOnSave": true,
+  "include": [
+    "src"
+  ]
+}

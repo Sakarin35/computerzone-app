@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 전체 문서에 대해 권한 설정
+    match /{document=**} {
+      allow read, write, delete: if request.auth != null;
+    }
+  }
+}

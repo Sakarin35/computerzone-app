@@ -1,4 +1,3 @@
-// app/layout.tsx
 import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
@@ -21,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body className={`${inter.className} bg-black text-white`}>
+      <body suppressHydrationWarning className={inter.className + " bg-black text-white"}>
         <AuthProvider>
           {/* 상단 메뉴바 – fixed로 변경 */}
           <header className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-b border-gray-800">
@@ -34,9 +33,7 @@ export default function RootLayout({
           </header>
 
           {/* main에 padding-top을 주어 헤더 아래로 내용이 밀리도록 */}
-          <main className="pt-16">
-            {children}
-          </main>
+          <main className="pt-16">{children}</main>
         </AuthProvider>
       </body>
     </html>
