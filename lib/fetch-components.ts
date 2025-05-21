@@ -1,178 +1,172 @@
+// lib/fetch-components.ts
 import { db } from "./firebase"
 import { collection, getDocs, doc, getDoc, query, limit } from "firebase/firestore"
-import { componentOptions } from "@/app/data/components"
 
+// Define the interface for component data from Firebase
 export interface FirebaseComponentData {
   id: string
   name: string
   price: number
-  description?: string
   image?: string
+  description?: string
   specs?: string
-  [key: string]: any
+  category?: string
+  url?: string
+  createdAt?: any
 }
 
-// Firebase 연결 상태 확인
-async function checkFirebaseConnection(): Promise<boolean> {
-  try {
-    // 간단한 테스트 쿼리 실행
-    const testCollection = collection(db, "test")
-    await getDocs(query(testCollection, limit(1)))
-    return true
-  } catch (error) {
-    console.error("Firebase connection test failed:", error)
-    return false
-  }
-}
+// ——— 여기에 실제 DB에 있는 카테고리 ID들을 넣어두세요 ———
+// (첫 글자만 대문자, 나머지 소문자 형태로)
+const FALLBACK_CATEGORY_IDS = [
+  "Ssd",
+  "Cpu",
+  "Memory",
+  "SSD",
+  "Case",
+  "Cooler",
+  "Power",
+  "Vga",
+  "M.B",
+]
 
-// 모든 컴포넌트 가져오기
+/** Fetch all components from all categories */
 export async function fetchComponents(): Promise<Record<string, FirebaseComponentData[]>> {
+  console.log("Fetching all components from Firebase...")
+
+  let categoryIds: string[]
+  try {
+    const categoriesSnapshot = await getDocs(collection(db, "crawled_components"))
+    console.log(`컬렉션 'crawled_components' 확인: ${categoriesSnapshot.size}개 문서 발견`)
+
+    // 빈 배열이거나 에러 없이도 문서가 없으면 Fallback
+    if (categoriesSnapshot.empty) {
+      console.warn("루트 스캔 결과 카테고리가 없습니다. Static fallback 사용")
+      categoryIds = FALLBACK_CATEGORY_IDS
+    } else {
+      // 정상적으로 읽어왔다면, 실제 ID 그대로 사용
+      categoryIds = categoriesSnapshot.docs.map((d) => d.id)
+    }
+  } catch (e) {
+    console.error("루트 컬렉션 조회 실패, Static fallback 사용:", e)
+    categoryIds = FALLBACK_CATEGORY_IDS
+  }
+
   const result: Record<string, FirebaseComponentData[]> = {}
 
-  try {
-    // Firebase 연결 확인
-    const isConnected = await checkFirebaseConnection()
-    if (!isConnected) {
-      console.warn("Firebase connection failed, using local data")
-      // 로컬 데이터 사용
-      return Object.keys(componentOptions).reduce(
-        (acc, type) => {
-          acc[type] = componentOptions[type]
-          return acc
-        },
-        {} as Record<string, FirebaseComponentData[]>,
+  for (const categoryId of categoryIds) {
+    // ★ 여기만 바뀌었습니다: key를 toLowerCase() 하지 않고, 실제 ID 그대로 사용
+    const key = categoryId
+    console.log(`Fetching components for category: ${categoryId}`)
+
+    try {
+      const itemsCollectionRef = collection(db, "crawled_components", categoryId, "items")
+      const itemsQuery = query(itemsCollectionRef, limit(10))
+      const componentsSnapshot = await getDocs(itemsQuery)
+
+      console.log(
+        `카테고리 '${categoryId}'의 items 컬렉션 확인: ${componentsSnapshot.size}개 문서 발견`
       )
-    }
 
-    // 각 컴포넌트 타입에 대해 컬렉션 가져오기
-    for (const type of Object.keys(componentOptions)) {
-      try {
-        console.log(`Fetching components for ${type}...`)
-        const componentsCollection = collection(db, `components/${type}/items`)
-        const componentsQuery = query(componentsCollection)
-        const snapshot = await getDocs(componentsQuery)
-
-        if (!snapshot.empty) {
-          result[type] = snapshot.docs.map((doc) => ({
+      if (!componentsSnapshot.empty) {
+        const components = componentsSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
             id: doc.id,
-            ...doc.data(),
-            price: Number(doc.data().price || 0), // 가격이 문자열로 저장되어 있을 경우 숫자로 변환
-          })) as FirebaseComponentData[]
-          console.log(`Fetched ${result[type].length} components for ${type}`)
-        } else {
-          // Firebase에 데이터가 없으면 로컬 데이터 사용
-          console.log(`No Firebase data for ${type}, using local data`)
-          result[type] = componentOptions[type]
-        }
-      } catch (error) {
-        console.error(`Error fetching components for ${type}:`, error)
-        // 오류 발생 시 로컬 데이터 사용
-        result[type] = componentOptions[type]
-      }
-    }
+            name: data.name || "Unknown",
+            price: typeof data.price === "number" ? data.price : 0,
+            image: data.image || "/placeholder.svg",
+            description: data.description || "",
+            specs: data.specs || "",
+            category: categoryId,
+            url: data.url || "",
+            createdAt: data.createdAt,
+          } as FirebaseComponentData
+        })
 
-    return result
-  } catch (error) {
-    console.error("Error fetching components:", error)
-    // 오류 발생 시 로컬 데이터 반환
-    return Object.keys(componentOptions).reduce(
-      (acc, type) => {
-        acc[type] = componentOptions[type]
-        return acc
-      },
-      {} as Record<string, FirebaseComponentData[]>,
+        result[key] = components
+      } else {
+        result[key] = []
+      }
+    } catch (error) {
+      console.error(`Error fetching components for category ${categoryId}:`, error)
+      result[key] = []
+    }
+  }
+
+  return result
+}
+
+/** Fetch components for a specific category */
+export async function fetchComponentsByCategory(
+  category: string
+): Promise<FirebaseComponentData[]> {
+  console.log(`Fetching components for category ${category}...`)
+
+  try {
+    // category는 이제 fetchComponents()에서 나온 실제 ID (예: "Ssd" 등) 그대로입니다
+    const itemsCollectionRef = collection(db, "crawled_components", category, "items")
+    const componentsSnapshot = await getDocs(itemsCollectionRef)
+
+    console.log(
+      `카테고리 '${category}'의 items 컬렉션 확인: ${componentsSnapshot.size}개 문서 발견`
     )
-  }
-}
 
-// ID로 특정 컴포넌트 가져오기
-export async function fetchComponentById(type: string, id: string): Promise<FirebaseComponentData | null> {
-  try {
-    console.log(`Fetching component ${type}/${id}...`)
-
-    // Firebase 연결 확인
-    const isConnected = await checkFirebaseConnection()
-    if (!isConnected) {
-      console.warn("Firebase connection failed, using local data")
-      // 로컬 데이터에서 찾기
-      const localComponent = componentOptions[type]?.find((c) => c.id === id)
-      return (localComponent as FirebaseComponentData) || null
+    if (componentsSnapshot.empty) {
+      console.log(`No components found for category ${category}`)
+      return []
     }
 
-    try {
-      const componentDoc = doc(db, `components/${type}/items/${id}`)
-      const snapshot = await getDoc(componentDoc)
-
-      if (snapshot.exists()) {
-        const data = snapshot.data()
-        return {
-          id: snapshot.id,
-          ...data,
-          price: Number(data.price || 0), // 가격이 문자열로 저장되어 있을 경우 숫자로 변환
-        } as FirebaseComponentData
-      }
-    } catch (error) {
-      console.error(`Error fetching component ${type}/${id} from Firebase:`, error)
-    }
-
-    // Firebase에서 찾지 못한 경우 로컬 데이터에서 찾기
-    console.log(`Component ${type}/${id} not found in Firebase, using local data`)
-    const localComponent = componentOptions[type]?.find((c) => c.id === id)
-    if (localComponent) {
-      return localComponent as FirebaseComponentData
-    }
-
-    return null
+    return componentsSnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        name: data.name || "Unknown",
+        price: typeof data.price === "number" ? data.price : 0,
+        image: data.image || "/placeholder.svg",
+        description: data.description || "",
+        specs: data.specs || "",
+        category: category,
+        url: data.url || "",
+        createdAt: data.createdAt,
+      } as FirebaseComponentData
+    })
   } catch (error) {
-    console.error(`Error in fetchComponentById for ${type}/${id}:`, error)
+    console.error(`Error fetching components for category ${category}:`, error)
+    return []
+  }
+}
 
-    // 오류 발생 시 로컬 데이터에서 찾기
-    const localComponent = componentOptions[type]?.find((c) => c.id === id)
-    if (localComponent) {
-      return localComponent as FirebaseComponentData
+/** Fetch a specific component by ID */
+export async function fetchComponentById(
+  category: string,
+  id: string
+): Promise<FirebaseComponentData | null> {
+  console.log(`Fetching component ${id} from category ${category}...`)
+
+  try {
+    const componentDoc = await getDoc(
+      doc(db, "crawled_components", category, "items", id)
+    )
+
+    if (!componentDoc.exists()) {
+      console.log(`Component ${id} not found in category ${category}`)
+      return null
     }
 
+    const data = componentDoc.data()
+    return {
+      id: componentDoc.id,
+      name: data.name || "Unknown",
+      price: typeof data.price === "number" ? data.price : 0,
+      image: data.image || "/placeholder.svg",
+      description: data.description || "",
+      specs: data.specs || "",
+      category: category,
+      url: data.url || "",
+      createdAt: data.createdAt,
+    }
+  } catch (error) {
+    console.error(`Error fetching component ${id} from category ${category}:`, error)
     return null
   }
 }
-
-// 카테고리별 컴포넌트 가져오기
-export async function fetchComponentsByCategory(category: string): Promise<FirebaseComponentData[]> {
-  try {
-    console.log(`Fetching components for category ${category}...`)
-
-    // Firebase 연결 확인
-    const isConnected = await checkFirebaseConnection()
-    if (!isConnected) {
-      console.warn("Firebase connection failed, using local data")
-      return componentOptions[category] || []
-    }
-
-    try {
-      const componentsCollection = collection(db, `components/${category}/items`)
-      const componentsQuery = query(componentsCollection)
-      const snapshot = await getDocs(componentsQuery)
-
-      if (!snapshot.empty) {
-        const result = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          price: Number(doc.data().price || 0),
-        })) as FirebaseComponentData[]
-        console.log(`Fetched ${result.length} components for category ${category}`)
-        return result
-      }
-    } catch (error) {
-      console.error(`Error fetching components for category ${category} from Firebase:`, error)
-    }
-
-    // Firebase에 데이터가 없으면 로컬 데이터 사용
-    console.log(`No Firebase data for category ${category}, using local data`)
-    return componentOptions[category] || []
-  } catch (error) {
-    console.error(`Error in fetchComponentsByCategory for ${category}:`, error)
-    // 오류 발생 시 로컬 데이터 반환
-    return componentOptions[category] || []
-  }
-}
-

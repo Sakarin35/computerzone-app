@@ -14,7 +14,7 @@ console.log("Firebase Config:", {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? "exists" : "missing",
 })
 
-// 실제 Firebase 설정은 그대로 유지
+// 실제 Firebase 설정
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -30,6 +30,14 @@ const auth = getAuth(app)
 const db = getFirestore(app)
 const storage = getStorage(app)
 
+// 초기화 후 Firebase 연결 상태 확인
+console.log("Firebase 초기화 완료:", {
+  app: app ? "성공" : "실패",
+  auth: auth ? "성공" : "실패",
+  db: db ? "성공" : "실패",
+  storage: storage ? "성공" : "실패",
+  projectId: app.options.projectId || "알 수 없음",
+})
+
 export { app, auth, db, storage }
 export const googleProvider = new GoogleAuthProvider()
-
