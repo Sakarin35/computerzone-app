@@ -1,5 +1,4 @@
 "use client"
-export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
@@ -27,9 +26,18 @@ export default function SelectType() {
     const type = searchParams.get("type") as ComponentType
     const id = searchParams.get("id")
     if (type && id) {
-      const option = componentOptions[type].find((opt) => opt.id === id)
-      if (option) {
-        setSelectedComponent({ type, name: option.name })
+      // componentOptions[type]이 존재하는지 확인
+      if (componentOptions[type] && Array.isArray(componentOptions[type])) {
+        const option = componentOptions[type].find((opt) => opt.id === id)
+        if (option) {
+          setSelectedComponent({ type, name: option.name })
+        } else {
+          // 로컬 데이터에 없는 경우, DB에서 온 부품일 수 있음
+          setSelectedComponent({ type, name: `${type} 부품` })
+        }
+      } else {
+        // componentOptions에 해당 타입이 없는 경우
+        setSelectedComponent({ type, name: `${type} 부품` })
       }
     }
   }, [searchParams])
@@ -37,13 +45,21 @@ export default function SelectType() {
   const handleCustomBuild = () => {
     const type = searchParams.get("type")
     const id = searchParams.get("id")
-    router.push(`/custom?type=${type}&id=${id}`)
+    if (type && id) {
+      router.push(`/custom?type=${type}&id=${id}`)
+    } else {
+      router.push(`/custom`)
+    }
   }
 
   const handleRecommendedBuild = () => {
     const type = searchParams.get("type")
     const id = searchParams.get("id")
-    router.push(`/recommended?type=${type}&id=${id}`)
+    if (type && id) {
+      router.push(`/recommended?type=${type}&id=${id}`)
+    } else {
+      router.push(`/recommended`)
+    }
   }
 
   return (
@@ -104,4 +120,3 @@ export default function SelectType() {
     </div>
   )
 }
-

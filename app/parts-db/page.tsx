@@ -6,10 +6,11 @@ import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { fetchComponents, fetchComponentsByCategory, type FirebaseComponentData } from "@/lib/fetch-components"
-import { checkFirebaseRules, testDirectDocumentCreation, createTestData } from "@/lib/firebase-debug"
 import PartsSearch from "@/components/parts-search"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
+import PartsFilter, { type FilterState } from "@/components/parts-filter"
+import { generateFiltersFromComponents, applyFilters } from "@/lib/filter-utils"
+import { calculatePopularityScore } from "@/lib/popularity-utils"
 
 export default function PartsDB() {
   const router = useRouter()
@@ -19,77 +20,12 @@ export default function PartsDB() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [categories, setCategories] = useState<string[]>([])
-  const [sortOption, setSortOption] = useState<"price-asc" | "price-desc" | "name-asc" | "name-desc">("price-asc")
+  const [sortOption, setSortOption] = useState<"price-asc" | "price-desc" | "name-asc" | "name-desc" | "popularity">(
+    "popularity",
+  )
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
-  const [isCheckingRules, setIsCheckingRules] = useState(false)
-  const [isTestingDirectCreation, setIsTestingDirectCreation] = useState(false)
-  const [isCreatingTestData, setIsCreatingTestData] = useState(false)
-
-  // Firebase 보안 규칙 확인
-  const handleCheckRules = async () => {
-    try {
-      setIsCheckingRules(true)
-      setDebugInfo("Firebase 보안 규칙 확인 중...")
-
-      const result = await checkFirebaseRules()
-
-      if (result) {
-        setDebugInfo("Firebase 보안 규칙 확인 완료: 접근 권한이 있습니다.")
-      } else {
-        setDebugInfo("Firebase 보안 규칙 확인 실패: 접근 권한이 없습니다.")
-      }
-    } catch (error) {
-      console.error("Firebase 보안 규칙 확인 중 오류:", error)
-      setDebugInfo(`Firebase 보안 규칙 확인 오류: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsCheckingRules(false)
-    }
-  }
-
-  // 직접 문서 생성 테스트 핸들러
-  const handleTestDirectCreation = async () => {
-    try {
-      setIsTestingDirectCreation(true)
-      setDebugInfo("직접 문서 생성 테스트 중...")
-
-      const result = await testDirectDocumentCreation()
-
-      if (result.success) {
-        setDebugInfo(`직접 문서 생성 테스트 성공: ${result.message}`)
-      } else {
-        setDebugInfo(`직접 문서 생성 테스트 실패: ${result.error}`)
-      }
-    } catch (error) {
-      console.error("직접 문서 생성 테스트 중 오류:", error)
-      setDebugInfo(`직접 문서 생성 테스트 오류: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsTestingDirectCreation(false)
-    }
-  }
-
-  // 테스트 데이터 생성 핸들러
-  const handleCreateTestData = async () => {
-    try {
-      setIsCreatingTestData(true)
-      setDebugInfo("테스트 데이터 생성 중...")
-
-      const result = await createTestData()
-
-      if (result.success) {
-        setDebugInfo(`테스트 데이터 생성 성공: ${result.message}`)
-        // 데이터가 생성되었으므로 컴포넌트 다시 로드
-        loadAllComponents()
-      } else {
-        setDebugInfo(`테스트 데이터 생성 실패: ${result.error}`)
-      }
-    } catch (error) {
-      console.error("테스트 데이터 생성 중 오류:", error)
-      setDebugInfo(`테스트 데이터 생성 오류: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsCreatingTestData(false)
-    }
-  }
+  const [filters, setFilters] = useState<FilterState>({})
+  const [availableFilters, setAvailableFilters] = useState<any[]>([])
 
   // 모든 컴포넌트 로드 함수
   const loadAllComponents = async () => {
@@ -177,28 +113,39 @@ export default function PartsDB() {
     loadCategoryComponents()
   }, [selectedType, components])
 
+  // 컴포넌트가 로드될 때 필터 생성
+  useEffect(() => {
+    if (currentComponents && currentComponents.length > 0) {
+      const generatedFilters = generateFiltersFromComponents(currentComponents, selectedType)
+      setAvailableFilters(generatedFilters)
+    }
+  }, [currentComponents, selectedType])
+
   // Filter components based on search query
   const filteredComponents = useMemo(() => {
     if (!currentComponents) return []
 
     let filtered = [...currentComponents]
-    console.log(`Filtering ${filtered.length} components with query: "${searchQuery}"`)
 
-    // Filter by search query
+    // 필터 적용
+    filtered = applyFilters(filtered, filters, selectedType)
+
+    // 검색 쿼리 적용
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase()
       filtered = filtered.filter((component) => {
         const nameMatch = component.name?.toLowerCase().includes(lowerQuery) || false
         const descMatch = component.description?.toLowerCase().includes(lowerQuery) || false
         const specsMatch = component.specs?.toLowerCase().includes(lowerQuery) || false
-
         return nameMatch || descMatch || specsMatch
       })
-      console.log(`Found ${filtered.length} components matching query`)
     }
 
-    // Sort components
+    // 정렬 적용
     switch (sortOption) {
+      case "popularity":
+        filtered.sort((a, b) => calculatePopularityScore(b) - calculatePopularityScore(a))
+        break
       case "price-asc":
         filtered.sort((a, b) => (a.price || 0) - (b.price || 0))
         break
@@ -214,7 +161,7 @@ export default function PartsDB() {
     }
 
     return filtered
-  }, [currentComponents, searchQuery, sortOption])
+  }, [currentComponents, searchQuery, sortOption, filters, selectedType])
 
   // Handle component selection
   const handleComponentSelect = (component: FirebaseComponentData) => {
@@ -246,6 +193,14 @@ export default function PartsDB() {
     router.push(`/select-type?type=${selectedType}&id=${component.id}`)
   }
 
+  const handleFilterChange = (newFilters: FilterState) => {
+    setFilters(newFilters)
+  }
+
+  const handleResetFilters = () => {
+    setFilters({})
+  }
+
   // Handle search
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -255,10 +210,11 @@ export default function PartsDB() {
   const handleCategoryChange = (category: string) => {
     setSelectedType(category)
     setSearchQuery("") // Reset search query when changing category
+    setFilters({}) // Reset filters when changing category
   }
 
   // Handle sort option change
-  const handleSortChange = (option: "price-asc" | "price-desc" | "name-asc" | "name-desc") => {
+  const handleSortChange = (option: "price-asc" | "price-desc" | "name-asc" | "name-desc" | "popularity") => {
     setSortOption(option)
   }
 
@@ -274,10 +230,19 @@ export default function PartsDB() {
       cooler: "쿨러",
       power: "파워서플라이",
       "m.b": "메인보드",
-      "test-category": "테스트 카테고리",
+      // Firebase에서 실제 사용되는 카테고리 이름들
+      Vga: "그래픽카드",
+      Cpu: "CPU",
+      "M.B": "메인보드",
+      Memory: "메모리",
+      SSD: "SSD",
+      Ssd: "SSD",
+      Case: "케이스",
+      Cooler: "쿨러",
+      Power: "파워서플라이",
     }
 
-    return categoryMap[category?.toLowerCase()] || category?.toUpperCase() || ""
+    return categoryMap[category] || category?.toUpperCase() || ""
   }
 
   if (loading && categories.length === 0) {
@@ -299,43 +264,6 @@ export default function PartsDB() {
           </div>
         )}
 
-        {/* 디버그 정보 및 Firebase 보안 규칙 확인 버튼 */}
-        <div className="mb-6 flex flex-col md:flex-row justify-between items-start gap-4">
-          <div className="flex-1">
-            {debugInfo && (
-              <div className="bg-blue-900/50 border border-blue-500 text-white p-4 rounded-md">
-                <p className="font-mono text-sm">{debugInfo}</p>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col md:flex-row gap-2">
-            <Button
-              onClick={handleCheckRules}
-              disabled={isCheckingRules}
-              variant="outline"
-              className="whitespace-nowrap"
-            >
-              {isCheckingRules ? "확인 중..." : "Firebase 권한 확인"}
-            </Button>
-            <Button
-              onClick={handleTestDirectCreation}
-              disabled={isTestingDirectCreation}
-              variant="outline"
-              className="whitespace-nowrap"
-            >
-              {isTestingDirectCreation ? "테스트 중..." : "직접 문서 생성 테스트"}
-            </Button>
-            <Button
-              onClick={handleCreateTestData}
-              disabled={isCreatingTestData}
-              variant="outline"
-              className="whitespace-nowrap"
-            >
-              {isCreatingTestData ? "생성 중..." : "테스트 데이터 생성"}
-            </Button>
-          </div>
-        </div>
-
         {/* Category tabs */}
         {categories.length > 0 ? (
           <Tabs value={selectedType} onValueChange={handleCategoryChange} className="mb-8">
@@ -353,6 +281,18 @@ export default function PartsDB() {
           </div>
         )}
 
+        {/* Filter section - 상단 가로 배치 */}
+        {availableFilters.length > 0 && (
+          <PartsFilter
+            category={selectedType}
+            totalCount={currentComponents.length}
+            filters={availableFilters}
+            selectedFilters={filters}
+            onFilterChange={handleFilterChange}
+            onResetFilters={handleResetFilters}
+          />
+        )}
+
         {/* Search and sort options */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
           <div className="w-full md:w-64">
@@ -366,6 +306,7 @@ export default function PartsDB() {
               onChange={(e) => handleSortChange(e.target.value as any)}
               className="bg-gray-800 text-white border border-gray-700 rounded px-2 py-1 text-sm"
             >
+              <option value="popularity">인기순</option>
               <option value="price-asc">가격 낮은순</option>
               <option value="price-desc">가격 높은순</option>
               <option value="name-asc">이름 오름차순</option>
@@ -430,9 +371,6 @@ export default function PartsDB() {
             ) : (
               <div className="col-span-full text-center py-12">
                 <p className="text-xl text-gray-400">이 카테고리에 부품이 없습니다.</p>
-                <Button onClick={handleCreateTestData} className="mt-4">
-                  테스트 데이터 생성하기
-                </Button>
               </div>
             )}
           </div>
