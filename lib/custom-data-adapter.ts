@@ -9,6 +9,8 @@ const CATEGORY_MAPPING: Record<string, ComponentType> = {
   memory: "memory",
   ssd: "ssd",
   mb: "mb",
+  "M.B": "mb", // Firebase의 M.B 카테고리 매핑 추가
+  "m.b": "mb", // 소문자 버전도 추가
   motherboard: "mb", // 메인보드 추가 매핑
   mainboard: "mb", // 메인보드 추가 매핑
   마더보드: "mb", // 한글 메인보드
@@ -72,8 +74,9 @@ export async function fetchCustomComponentData(): Promise<Record<ComponentType, 
     // 카테고리별로 데이터 그룹화 및 인기순 정렬
     Object.entries(CATEGORY_MAPPING).forEach(([firebaseCategory, customCategory]) => {
       const categoryData = allFirebaseData.filter((item) => {
-        const itemCategory = (item as any).category?.toLowerCase() || ""
-        return itemCategory === firebaseCategory.toLowerCase()
+        const itemCategory = (item as any).category || ""
+        // 정확한 매칭과 소문자 매칭 모두 시도
+        return itemCategory === firebaseCategory || itemCategory.toLowerCase() === firebaseCategory.toLowerCase()
       })
 
       if (categoryData.length > 0) {

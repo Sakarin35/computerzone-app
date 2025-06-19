@@ -63,9 +63,27 @@ export function generateFiltersFromComponents(components: FirebaseComponentData[
   return filters.filter((filter) => filter.options.length > 0)
 }
 
-// CPU 전용 필터 생성
+// 텍스트 정규화 함수
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ") // 여러 공백을 하나로
+    .replace(/[^\w\s가-힣]/g, "") // 특수문자 제거 (한글, 영문, 숫자, 공백만 유지)
+    .trim()
+}
+
+// CPU 전용 필터 생성 - 확장된 버전
 function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
+
+  // 디버깅을 위해 샘플 데이터 출력
+  console.log("=== CPU 필터 생성 디버깅 ===")
+  console.log("샘플 컴포넌트 (처음 5개):")
+  components.slice(0, 5).forEach((comp, index) => {
+    console.log(`${index + 1}. ${comp.name}`)
+    console.log(`   설명: ${comp.description || "없음"}`)
+    console.log(`   스펙: ${comp.specs || "없음"}`)
+  })
 
   // 1. 제조사 필터 - 인텔과 AMD만 표시
   const manufacturers = [
@@ -74,24 +92,10 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    if (
-      text.includes("intel") ||
-      text.includes("인텔") ||
-      text.includes("core") ||
-      text.includes("코어") ||
-      text.includes("i3") ||
-      text.includes("i5") ||
-      text.includes("i7") ||
-      text.includes("i9") ||
-      text.includes("xeon") ||
-      text.includes("제온")
-    ) {
-      manufacturers[0].count++
-    }
-
-    if (
+    // AMD 제품 먼저 체크 (더 구체적인 조건)
+    const isAmd =
       text.includes("amd") ||
       text.includes("ryzen") ||
       text.includes("라이젠") ||
@@ -100,7 +104,28 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
       text.includes("스레드리퍼") ||
       text.includes("athlon") ||
       text.includes("애슬론")
-    ) {
+
+    // Intel 제품 체크 (AMD가 아닌 경우에만)
+    const isIntel =
+      !isAmd &&
+      (text.includes("intel") ||
+        text.includes("인텔") ||
+        (text.includes("core") && !text.includes("라이젠")) ||
+        (text.includes("코어") && !text.includes("라이젠")) ||
+        text.includes("i3") ||
+        text.includes("i5") ||
+        text.includes("i7") ||
+        text.includes("i9") ||
+        text.includes("xeon") ||
+        text.includes("제온") ||
+        text.includes("ultra") ||
+        text.includes("울트라"))
+
+    if (isIntel) {
+      manufacturers[0].count++
+    }
+
+    if (isAmd) {
       manufacturers[1].count++
     }
   })
@@ -112,63 +137,101 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 2. 인텔 CPU종류
+  // 2. 인텔 CPU종류 - 확장된 버전
   const intelCpuTypes = [
-    { id: "코어-울트라9s2", label: "코어 울트라9(S2)", count: 0 },
-    { id: "코어-울트라7s2", label: "코어 울트라7(S2)", count: 0 },
-    { id: "코어-울트라5s2", label: "코어 울트라5(S2)", count: 0 },
-    { id: "코어i9-14세대", label: "코어i9-14세대", count: 0 },
-    { id: "코어i7-14세대", label: "코어i7-14세대", count: 0 },
-    { id: "코어i5-14세대", label: "코어i5-14세대", count: 0 },
-    { id: "코어i3-14세대", label: "코어i3-14세대", count: 0 },
-    { id: "코어i9-13세대", label: "코어i9-13세대", count: 0 },
-    { id: "코어i7-13세대", label: "코어i7-13세대", count: 0 },
-    { id: "코어i5-13세대", label: "코어i5-13세대", count: 0 },
-    { id: "코어i3-13세대", label: "코어i3-13세대", count: 0 },
-    { id: "코어i9-12세대", label: "코어i9-12세대", count: 0 },
-    { id: "코어i7-12세대", label: "코어i7-12세대", count: 0 },
-    { id: "코어i5-12세대", label: "코어i5-12세대", count: 0 },
-    { id: "코어i3-12세대", label: "코어i3-12세대", count: 0 },
-    { id: "제온", label: "제온", count: 0 },
-    { id: "코어i9", label: "코어i9", count: 0 },
-    { id: "코어i7", label: "코어i7", count: 0 },
-    { id: "코어i5", label: "코어i5", count: 0 },
-    { id: "코어i3", label: "코어i3", count: 0 },
+    { id: "코어-울트라9s2", label: "코어 울트라9(S2)", count: 0, keywords: ["ultra 9", "울트라9", "core ultra 9"] },
+    { id: "코어-울트라7s2", label: "코어 울트라7(S2)", count: 0, keywords: ["ultra 7", "울트라7", "core ultra 7"] },
+    { id: "코어-울트라5s2", label: "코어 울트라5(S2)", count: 0, keywords: ["ultra 5", "울트라5", "core ultra 5"] },
+    { id: "코어i9-15세대", label: "코어i9-15세대", count: 0, keywords: ["i9 15", "i9-15", "15세대", "15th gen"] },
+    { id: "코어i7-15세대", label: "코어i7-15세대", count: 0, keywords: ["i7 15", "i7-15", "15세대", "15th gen"] },
+    { id: "코어i5-15세대", label: "코어i5-15세대", count: 0, keywords: ["i5 15", "i5-15", "15세대", "15th gen"] },
+    { id: "코어i3-15세대", label: "코어i3-15세대", count: 0, keywords: ["i3 15", "i3-15", "15세대", "15th gen"] },
+    { id: "코어i9-14세대", label: "코어i9-14세대", count: 0, keywords: ["i9 14", "i9-14", "14세대", "14th gen"] },
+    { id: "코어i7-14세대", label: "코어i7-14세대", count: 0, keywords: ["i7 14", "i7-14", "14세대", "14th gen"] },
+    { id: "코어i5-14세대", label: "코어i5-14세대", count: 0, keywords: ["i5 14", "i5-14", "14세대", "14th gen"] },
+    { id: "코어i3-14세대", label: "코어i3-14세대", count: 0, keywords: ["i3 14", "i3-14", "14세대", "14th gen"] },
+    { id: "코어i9-13세대", label: "코어i9-13세대", count: 0, keywords: ["i9 13", "i9-13", "13세대", "13th gen"] },
+    { id: "코어i7-13세대", label: "코어i7-13세대", count: 0, keywords: ["i7 13", "i7-13", "13세대", "13th gen"] },
+    { id: "코어i5-13세대", label: "코어i5-13세대", count: 0, keywords: ["i5 13", "i5-13", "13세대", "13th gen"] },
+    { id: "코어i3-13세대", label: "코어i3-13세대", count: 0, keywords: ["i3 13", "i3-13", "13세대", "13th gen"] },
+    { id: "코어i9-12세대", label: "코어i9-12세대", count: 0, keywords: ["i9 12", "i9-12", "12세대", "12th gen"] },
+    { id: "코어i7-12세대", label: "코어i7-12세대", count: 0, keywords: ["i7 12", "i7-12", "12세대", "12th gen"] },
+    { id: "코어i5-12세대", label: "코어i5-12세대", count: 0, keywords: ["i5 12", "i5-12", "12세대", "12th gen"] },
+    { id: "코어i3-12세대", label: "코어i3-12세대", count: 0, keywords: ["i3 12", "i3-12", "12세대", "12th gen"] },
+    { id: "코어i9-11세대", label: "코어i9-11세대", count: 0, keywords: ["i9 11", "i9-11", "11세대", "11th gen"] },
+    { id: "코어i7-11세대", label: "코어i7-11세대", count: 0, keywords: ["i7 11", "i7-11", "11세대", "11th gen"] },
+    { id: "코어i5-11세대", label: "코어i5-11세대", count: 0, keywords: ["i5 11", "i5-11", "11세대", "11th gen"] },
+    { id: "코어i3-11세대", label: "코어i3-11세대", count: 0, keywords: ["i3 11", "i3-11", "11세대", "11th gen"] },
+    { id: "코어i9-10세대", label: "코어i9-10세대", count: 0, keywords: ["i9 10", "i9-10", "10세대", "10th gen"] },
+    { id: "코어i7-10세대", label: "코어i7-10세대", count: 0, keywords: ["i7 10", "i7-10", "10세대", "10th gen"] },
+    { id: "코어i5-10세대", label: "코어i5-10세대", count: 0, keywords: ["i5 10", "i5-10", "10세대", "10th gen"] },
+    { id: "코어i3-10세대", label: "코어i3-10세대", count: 0, keywords: ["i3 10", "i3-10", "10세대", "10th gen"] },
+    { id: "제온-w", label: "제온-W", count: 0, keywords: ["xeon w", "제온 w", "xeon-w"] },
+    { id: "제온-e", label: "제온-E", count: 0, keywords: ["xeon e", "제온 e", "xeon-e"] },
+    { id: "제온", label: "제온", count: 0, keywords: ["xeon", "제온"] },
+    { id: "펜티엄", label: "펜티엄", count: 0, keywords: ["pentium", "펜티엄"] },
+    { id: "셀러론", label: "셀러론", count: 0, keywords: ["celeron", "셀러론"] },
   ]
 
+  // 인텔 CPU 카운팅
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    // 인텔 제품만 필터링
-    if (!text.includes("intel") && !text.includes("인텔") && !text.includes("core") && !text.includes("코어")) {
-      return
+    // AMD 제품 먼저 체크
+    const isAmd =
+      text.includes("amd") ||
+      text.includes("ryzen") ||
+      text.includes("라이젠") ||
+      text.includes("epyc") ||
+      text.includes("threadripper") ||
+      text.includes("스레드리퍼") ||
+      text.includes("athlon") ||
+      text.includes("애슬론")
+
+    // 인텔 제품만 필터링 (AMD가 아닌 경우에만)
+    if (isAmd) return
+
+    const isIntel =
+      text.includes("intel") ||
+      text.includes("인텔") ||
+      text.includes("core") ||
+      text.includes("코어") ||
+      text.includes("i3") ||
+      text.includes("i5") ||
+      text.includes("i7") ||
+      text.includes("i9") ||
+      text.includes("xeon") ||
+      text.includes("제온") ||
+      text.includes("ultra") ||
+      text.includes("울트라") ||
+      text.includes("pentium") ||
+      text.includes("펜티엄") ||
+      text.includes("celeron") ||
+      text.includes("셀러론")
+
+    if (!isIntel) return
+
+    // 각 CPU 종류 매칭 (하나의 제품은 하나의 카테고리에만 카운트)
+    let counted = false
+
+    for (const cpuType of intelCpuTypes) {
+      if (counted) break
+
+      for (const keyword of cpuType.keywords) {
+        if (text.includes(keyword)) {
+          cpuType.count++
+          counted = true
+
+          // 울트라 제품 디버깅
+          if (keyword.includes("ultra") || keyword.includes("울트라")) {
+            console.log(`🔍 울트라 제품 발견: ${component.name}`)
+            console.log(`   매칭된 키워드: ${keyword}`)
+            console.log(`   정규화된 텍스트: ${text}`)
+          }
+          break
+        }
+      }
     }
-
-    // 각 CPU 종류 매칭
-    if (text.includes("울트라9") || text.includes("ultra 9")) intelCpuTypes[0].count++
-    if (text.includes("울트라7") || text.includes("ultra 7")) intelCpuTypes[1].count++
-    if (text.includes("울트라5") || text.includes("ultra 5")) intelCpuTypes[2].count++
-    if (text.includes("i9") && (text.includes("14") || text.includes("14세대"))) intelCpuTypes[3].count++
-    if (text.includes("i7") && (text.includes("14") || text.includes("14세대"))) intelCpuTypes[4].count++
-    if (text.includes("i5") && (text.includes("14") || text.includes("14세대"))) intelCpuTypes[5].count++
-    if (text.includes("i3") && (text.includes("14") || text.includes("14세대"))) intelCpuTypes[6].count++
-    if (text.includes("i9") && (text.includes("13") || text.includes("13세대"))) intelCpuTypes[7].count++
-    if (text.includes("i7") && (text.includes("13") || text.includes("13세대"))) intelCpuTypes[8].count++
-    if (text.includes("i5") && (text.includes("13") || text.includes("13세대"))) intelCpuTypes[9].count++
-    if (text.includes("i3") && (text.includes("13") || text.includes("13세대"))) intelCpuTypes[10].count++
-    if (text.includes("i9") && (text.includes("12") || text.includes("12세대"))) intelCpuTypes[11].count++
-    if (text.includes("i7") && (text.includes("12") || text.includes("12세대"))) intelCpuTypes[12].count++
-    if (text.includes("i5") && (text.includes("12") || text.includes("12세대"))) intelCpuTypes[13].count++
-    if (text.includes("i3") && (text.includes("12") || text.includes("12세대"))) intelCpuTypes[14].count++
-    if (text.includes("xeon") || text.includes("제온")) intelCpuTypes[15].count++
-    if (text.includes("i9") && !text.includes("12") && !text.includes("13") && !text.includes("14"))
-      intelCpuTypes[16].count++
-    if (text.includes("i7") && !text.includes("12") && !text.includes("13") && !text.includes("14"))
-      intelCpuTypes[17].count++
-    if (text.includes("i5") && !text.includes("12") && !text.includes("13") && !text.includes("14"))
-      intelCpuTypes[18].count++
-    if (text.includes("i3") && !text.includes("12") && !text.includes("13") && !text.includes("14"))
-      intelCpuTypes[19].count++
   })
 
   filters.push({
@@ -178,59 +241,122 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 3. AMD CPU종류
+  // 3. AMD CPU종류 - 간단하고 정확한 버전
   const amdCpuTypes = [
     { id: "라이젠9-6세대", label: "라이젠9-6세대", count: 0 },
     { id: "라이젠7-6세대", label: "라이젠7-6세대", count: 0 },
     { id: "라이젠5-6세대", label: "라이젠5-6세대", count: 0 },
+    { id: "라이젠3-6세대", label: "라이젠3-6세대", count: 0 },
     { id: "라이젠9-5세대", label: "라이젠9-5세대", count: 0 },
     { id: "라이젠7-5세대", label: "라이젠7-5세대", count: 0 },
     { id: "라이젠5-5세대", label: "라이젠5-5세대", count: 0 },
+    { id: "라이젠3-5세대", label: "라이젠3-5세대", count: 0 },
     { id: "라이젠9-4세대", label: "라이젠9-4세대", count: 0 },
     { id: "라이젠7-4세대", label: "라이젠7-4세대", count: 0 },
     { id: "라이젠5-4세대", label: "라이젠5-4세대", count: 0 },
+    { id: "라이젠3-4세대", label: "라이젠3-4세대", count: 0 },
+    { id: "라이젠9-3세대", label: "라이젠9-3세대", count: 0 },
+    { id: "라이젠7-3세대", label: "라이젠7-3세대", count: 0 },
+    { id: "라이젠5-3세대", label: "라이젠5-3세대", count: 0 },
+    { id: "라이젠3-3세대", label: "라이젠3-3세대", count: 0 },
+    { id: "라이젠-스레드리퍼-pro", label: "라이젠 스레드리퍼 PRO", count: 0 },
     { id: "라이젠-스레드리퍼", label: "라이젠 스레드리퍼", count: 0 },
     { id: "epyc", label: "EPYC", count: 0 },
+    { id: "애슬론", label: "애슬론", count: 0 },
   ]
 
+  // AMD CPU 카운팅 - 간단한 로직
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
     // AMD 제품만 필터링
-    if (!text.includes("amd") && !text.includes("ryzen") && !text.includes("라이젠") && !text.includes("epyc")) {
-      return
+    const isAmd =
+      text.includes("amd") ||
+      text.includes("ryzen") ||
+      text.includes("라이젠") ||
+      text.includes("epyc") ||
+      text.includes("threadripper") ||
+      text.includes("스레드리퍼") ||
+      text.includes("athlon") ||
+      text.includes("애슬론")
+
+    if (!isAmd) return
+
+    console.log(`🔍 AMD 제품 분석: ${component.name}`)
+    console.log(`   정규화된 텍스트: ${text}`)
+
+    // 각 CPU 종류 매칭 (하나의 제품은 하나의 카테고리에만 카운트)
+    let counted = false
+
+    // EPYC 먼저 체크 (가장 구체적)
+    if (!counted && text.includes("epyc")) {
+      amdCpuTypes.find((t) => t.id === "epyc")!.count++
+      counted = true
+      console.log(`   -> EPYC로 분류`)
     }
 
-    // 각 CPU 종류 매칭
-    if ((text.includes("라이젠9") || text.includes("ryzen 9")) && (text.includes("9000") || text.includes("6세대")))
-      amdCpuTypes[0].count++
-    if ((text.includes("라이젠7") || text.includes("ryzen 7")) && (text.includes("9000") || text.includes("6세대")))
-      amdCpuTypes[1].count++
-    if ((text.includes("라이젠5") || text.includes("ryzen 5")) && (text.includes("9000") || text.includes("6세대")))
-      amdCpuTypes[2].count++
-    if (
-      (text.includes("라이젠9") || text.includes("ryzen 9")) &&
-      (text.includes("7000") || text.includes("8000") || text.includes("5세대"))
-    )
-      amdCpuTypes[3].count++
-    if (
-      (text.includes("라이젠7") || text.includes("ryzen 7")) &&
-      (text.includes("7000") || text.includes("8000") || text.includes("5세대"))
-    )
-      amdCpuTypes[4].count++
-    if (
-      (text.includes("라이젠5") || text.includes("ryzen 5")) &&
-      (text.includes("7000") || text.includes("8000") || text.includes("5세대"))
-    )
-      amdCpuTypes[5].count++
-    if ((text.includes("라이젠9") || text.includes("ryzen 9")) && (text.includes("5000") || text.includes("4세대")))
-      amdCpuTypes[6].count++
-    if ((text.includes("라이젠7") || text.includes("ryzen 7")) && (text.includes("5000") || text.includes("4세대")))
-      amdCpuTypes[7].count++
-    if ((text.includes("라이젠5") || text.includes("ryzen 5")) && (text.includes("5000") || text.includes("4세대")))
-      amdCpuTypes[8].count++
-    if (text.includes("threadripper") || text.includes("스레드리퍼")) amdCpuTypes[9].count++
-    if (text.includes("epyc")) amdCpuTypes[10].count++
+    // 스레드리퍼 체크
+    if (!counted && (text.includes("threadripper pro") || text.includes("스레드리퍼 pro"))) {
+      amdCpuTypes.find((t) => t.id === "라이젠-스레드리퍼-pro")!.count++
+      counted = true
+      console.log(`   -> 스레드리퍼 PRO로 분류`)
+    }
+    if (!counted && (text.includes("threadripper") || text.includes("스레드리퍼"))) {
+      amdCpuTypes.find((t) => t.id === "라이젠-스레드리퍼")!.count++
+      counted = true
+      console.log(`   -> 스레드리퍼로 분류`)
+    }
+
+    // 애슬론 체크
+    if (!counted && (text.includes("athlon") || text.includes("애슬론"))) {
+      amdCpuTypes.find((t) => t.id === "애슬론")!.count++
+      counted = true
+      console.log(`   -> 애슬론으로 분류`)
+    }
+
+    // 라이젠 시리즈 체크 (모델 번호 기반)
+    if (!counted && (text.includes("ryzen") || text.includes("라이젠"))) {
+      // 모델 번호 추출 (예: 7600X, 5800X, 9950X 등)
+      const modelMatch = text.match(/(\d{4})[a-z]*/) // 4자리 숫자 + 선택적 문자
+
+      if (modelMatch) {
+        const modelNumber = Number.parseInt(modelMatch[1])
+        console.log(`   모델 번호: ${modelNumber}`)
+
+        // 라이젠 시리즈 구분 (Ryzen 3, 5, 7, 9)
+        let series = ""
+        if (text.includes("ryzen 9") || text.includes("라이젠9")) series = "9"
+        else if (text.includes("ryzen 7") || text.includes("라이젠7")) series = "7"
+        else if (text.includes("ryzen 5") || text.includes("라이젠5")) series = "5"
+        else if (text.includes("ryzen 3") || text.includes("라이젠3")) series = "3"
+
+        if (series) {
+          // 세대 구분 (모델 번호 첫 자리로 판단)
+          let generation = ""
+          if (modelNumber >= 9000)
+            generation = "6세대" // 9000 시리즈 = 6세대
+          else if (modelNumber >= 7000)
+            generation = "5세대" // 7000, 8000 시리즈 = 5세대
+          else if (modelNumber >= 5000)
+            generation = "4세대" // 5000 시리즈 = 4세대
+          else if (modelNumber >= 3000) generation = "3세대" // 3000 시리즈 = 3세대
+
+          if (generation) {
+            const cpuTypeId = `라이젠${series}-${generation}`
+            const cpuType = amdCpuTypes.find((t) => t.id === cpuTypeId)
+            if (cpuType) {
+              cpuType.count++
+              counted = true
+              console.log(`   -> ${cpuType.label}로 분류`)
+            }
+          }
+        }
+      }
+    }
+
+    if (!counted) {
+      console.log(`   -> 분류되지 않음`)
+    }
   })
 
   filters.push({
@@ -240,23 +366,29 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 4. 소켓 구분
+  // 4. 소켓 구분 - 확장된 버전
   const socketTypes = [
-    { id: "인텔소켓1851", label: "인텔(소켓1851)", count: 0 },
-    { id: "인텔소켓1700", label: "인텔(소켓1700)", count: 0 },
-    { id: "인텔소켓1200", label: "인텔(소켓1200)", count: 0 },
-    { id: "amd소켓am5", label: "AMD(소켓AM5)", count: 0 },
-    { id: "amd소켓am4", label: "AMD(소켓AM4)", count: 0 },
+    { id: "인텔소켓1851", label: "인텔(소켓1851)", count: 0, keywords: ["1851", "lga1851"] },
+    { id: "인텔소켓1700", label: "인텔(소켓1700)", count: 0, keywords: ["1700", "lga1700"] },
+    { id: "인텔소켓1200", label: "인텔(소켓1200)", count: 0, keywords: ["1200", "lga1200"] },
+    { id: "인텔소켓1151", label: "인텔(소켓1151)", count: 0, keywords: ["1151", "lga1151"] },
+    { id: "인텔소켓1150", label: "인텔(소켓1150)", count: 0, keywords: ["1150", "lga1150"] },
+    { id: "인텔소켓2066", label: "인텔(소켓2066)", count: 0, keywords: ["2066", "lga2066"] },
+    { id: "amd소켓am5", label: "AMD(소켓AM5)", count: 0, keywords: ["am5"] },
+    { id: "amd소켓am4", label: "AMD(소켓AM4)", count: 0, keywords: ["am4"] },
+    { id: "amd소켓am3", label: "AMD(소켓AM3)", count: 0, keywords: ["am3"] },
+    { id: "amd소켓tr4", label: "AMD(소켓TR4)", count: 0, keywords: ["tr4", "strx4"] },
+    { id: "amd소켓sp3", label: "AMD(소켓SP3)", count: 0, keywords: ["sp3"] },
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    if (text.includes("1851") || text.includes("lga1851")) socketTypes[0].count++
-    if (text.includes("1700") || text.includes("lga1700")) socketTypes[1].count++
-    if (text.includes("1200") || text.includes("lga1200")) socketTypes[2].count++
-    if (text.includes("am5")) socketTypes[3].count++
-    if (text.includes("am4")) socketTypes[4].count++
+    socketTypes.forEach((socketType) => {
+      if (socketType.keywords.some((keyword) => text.includes(keyword))) {
+        socketType.count++
+      }
+    })
   })
 
   filters.push({
@@ -266,8 +398,10 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 5. 코어 수
+  // 5. 코어 수 - 확장된 버전
   const coreCountTypes = [
+    { id: "64코어", label: "64코어", count: 0 },
+    { id: "32코어", label: "32코어", count: 0 },
     { id: "24코어", label: "24코어", count: 0 },
     { id: "20코어", label: "20코어", count: 0 },
     { id: "16코어", label: "16코어", count: 0 },
@@ -281,13 +415,14 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    // 정규식으로 코어 수 추출
-    const coreMatch = text.match(/(\d+)코어/)
-    if (coreMatch) {
-      const coreCount = coreMatch[1]
-      const coreType = coreCountTypes.find((c) => c.label === `${coreCount}코어`)
+    // 정규식으로 코어 수 추출 (가장 큰 수부터 매칭)
+    const coreMatches = text.match(/(\d+)코어/g) || text.match(/(\d+)\s*core/g)
+    if (coreMatches && coreMatches.length > 0) {
+      // 가장 큰 코어 수만 카운트
+      const maxCores = Math.max(...coreMatches.map((match) => Number.parseInt(match.replace(/[^\d]/g, ""))))
+      const coreType = coreCountTypes.find((c) => c.label === `${maxCores}코어`)
       if (coreType) {
         coreType.count++
       }
@@ -301,8 +436,11 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 6. 스레드 수
+  // 6. 스레드 수 - 확장된 버전
   const threadCountTypes = [
+    { id: "128스레드", label: "128스레드", count: 0 },
+    { id: "64스레드", label: "64스레드", count: 0 },
+    { id: "48스레드", label: "48스레드", count: 0 },
     { id: "32스레드", label: "32스레드", count: 0 },
     { id: "28스레드", label: "28스레드", count: 0 },
     { id: "24스레드", label: "24스레드", count: 0 },
@@ -316,10 +454,10 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
     // 정규식으로 스레드 수 추출
-    const threadMatch = text.match(/(\d+)스레드/)
+    const threadMatch = text.match(/(\d+)스레드/) || text.match(/(\d+)\s*thread/)
     if (threadMatch) {
       const threadCount = threadMatch[1]
       const threadType = threadCountTypes.find((t) => t.label === `${threadCount}스레드`)
@@ -336,23 +474,27 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 7. 메모리 규격
+  // 7. 메모리 규격 - 확장된 버전
   const memoryTypes = [
     { id: "ddr5", label: "DDR5", count: 0 },
     { id: "ddr5-ddr4", label: "DDR5, DDR4", count: 0 },
     { id: "ddr4", label: "DDR4", count: 0 },
     { id: "ddr4-ddr3l", label: "DDR4, DDR3L", count: 0 },
     { id: "ddr3", label: "DDR3", count: 0 },
+    { id: "ddr3l", label: "DDR3L", count: 0 },
+    { id: "ddr2", label: "DDR2", count: 0 },
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
     if (text.includes("ddr5") && text.includes("ddr4")) memoryTypes[1].count++
     else if (text.includes("ddr5")) memoryTypes[0].count++
     else if (text.includes("ddr4") && text.includes("ddr3l")) memoryTypes[3].count++
     else if (text.includes("ddr4")) memoryTypes[2].count++
+    else if (text.includes("ddr3l")) memoryTypes[5].count++
     else if (text.includes("ddr3")) memoryTypes[4].count++
+    else if (text.includes("ddr2")) memoryTypes[6].count++
   })
 
   filters.push({
@@ -365,7 +507,7 @@ function generateCpuFilters(components: FirebaseComponentData[]): FilterCategory
   return filters
 }
 
-// VGA(그래픽카드) 전용 필터 생성
+// VGA(그래픽카드) 전용 필터 생성 - 상세 버전
 function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
 
@@ -378,23 +520,6 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
     { id: "이엠텍", label: "이엠텍", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("msi")) manufacturers[0].count++
-    if (text.includes("palit")) manufacturers[1].count++
-    if (text.includes("gigabyte")) manufacturers[2].count++
-    if (text.includes("asus")) manufacturers[3].count++
-    if (text.includes("이엠텍") || text.includes("emtek")) manufacturers[4].count++
-  })
-
-  filters.push({
-    id: "manufacturer",
-    label: "제조사",
-    options: manufacturers.filter((m) => m.count > 0),
-    isOpen: true,
-  })
-
   // 2. 칩셋 제조사
   const chipsetManufacturers = [
     { id: "nvidia", label: "NVIDIA", count: 0 },
@@ -403,23 +528,6 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
     { id: "matrox", label: "Matrox", count: 0 },
     { id: "furiosai", label: "FuriosaAI", count: 0 },
   ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("nvidia") || text.includes("rtx") || text.includes("gtx")) chipsetManufacturers[0].count++
-    if (text.includes("amd") || text.includes("radeon") || text.includes("rx")) chipsetManufacturers[1].count++
-    if (text.includes("intel") || text.includes("arc")) chipsetManufacturers[2].count++
-    if (text.includes("matrox")) chipsetManufacturers[3].count++
-    if (text.includes("furiosa")) chipsetManufacturers[4].count++
-  })
-
-  filters.push({
-    id: "chipset-manufacturer",
-    label: "칩셋 제조사",
-    options: chipsetManufacturers.filter((m) => m.count > 0),
-    isOpen: true,
-  })
 
   // 3. 제품 시리즈
   const productSeries = [
@@ -430,69 +538,14 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
     { id: "라데온-rx-7000", label: "라데온 RX 7000", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("rtx 50") || text.includes("5090") || text.includes("5080")) productSeries[0].count++
-    if (
-      text.includes("rtx 40") ||
-      text.includes("4090") ||
-      text.includes("4080") ||
-      text.includes("4070") ||
-      text.includes("4060")
-    )
-      productSeries[1].count++
-    if (
-      text.includes("rtx 30") ||
-      text.includes("3090") ||
-      text.includes("3080") ||
-      text.includes("3070") ||
-      text.includes("3060")
-    )
-      productSeries[2].count++
-    if (text.includes("rx 9000") || text.includes("9070") || text.includes("9060")) productSeries[3].count++
-    if (
-      text.includes("rx 7000") ||
-      text.includes("7900") ||
-      text.includes("7800") ||
-      text.includes("7700") ||
-      text.includes("7600")
-    )
-      productSeries[4].count++
-  })
-
-  filters.push({
-    id: "product-series",
-    label: "제품 시리즈",
-    options: productSeries.filter((s) => s.count > 0),
-    isOpen: true,
-  })
-
   // 4. GPU 제조 공정
   const gpuProcess = [
-    { id: "4-nm", label: "4 nm", count: 0 },
-    { id: "8-nm", label: "8 nm", count: 0 },
-    { id: "12-nm", label: "12 nm", count: 0 },
-    { id: "14-nm", label: "14 nm", count: 0 },
-    { id: "16-nm", label: "16 nm", count: 0 },
+    { id: "4nm", label: "4 nm", count: 0 },
+    { id: "8nm", label: "8 nm", count: 0 },
+    { id: "12nm", label: "12 nm", count: 0 },
+    { id: "14nm", label: "14 nm", count: 0 },
+    { id: "16nm", label: "16 nm", count: 0 },
   ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("4 nm") || text.includes("4nm")) gpuProcess[0].count++
-    if (text.includes("8 nm") || text.includes("8nm")) gpuProcess[1].count++
-    if (text.includes("12 nm") || text.includes("12nm")) gpuProcess[2].count++
-    if (text.includes("14 nm") || text.includes("14nm")) gpuProcess[3].count++
-    if (text.includes("16 nm") || text.includes("16nm")) gpuProcess[4].count++
-  })
-
-  filters.push({
-    id: "gpu-process",
-    label: "GPU 제조 공정",
-    options: gpuProcess.filter((p) => p.count > 0),
-    isOpen: true,
-  })
 
   // 5. NVIDIA 칩셋
   const nvidiaChipsets = [
@@ -503,23 +556,6 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
     { id: "rtx-5060", label: "RTX 5060", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("rtx 5090") || text.includes("rtx5090")) nvidiaChipsets[0].count++
-    if (text.includes("rtx 5080") || text.includes("rtx5080")) nvidiaChipsets[1].count++
-    if (text.includes("rtx 5070") && !text.includes("ti")) nvidiaChipsets[2].count++
-    if (text.includes("rtx 5070 ti") || text.includes("rtx5070ti")) nvidiaChipsets[3].count++
-    if (text.includes("rtx 5060") || text.includes("rtx5060")) nvidiaChipsets[4].count++
-  })
-
-  filters.push({
-    id: "nvidia-chipset",
-    label: "NVIDIA 칩셋",
-    options: nvidiaChipsets.filter((c) => c.count > 0),
-    isOpen: true,
-  })
-
   // 6. AMD 칩셋
   const amdChipsets = [
     { id: "rx-9070-xt", label: "RX 9070 XT", count: 0 },
@@ -528,23 +564,6 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
     { id: "rx-7800-xt", label: "RX 7800 XT", count: 0 },
     { id: "rx-7700-xt", label: "RX 7700 XT", count: 0 },
   ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("rx 9070 xt") || text.includes("rx9070xt")) amdChipsets[0].count++
-    if (text.includes("rx 9070") && !text.includes("xt")) amdChipsets[1].count++
-    if (text.includes("rx 7900 xtx") || text.includes("rx7900xtx")) amdChipsets[2].count++
-    if (text.includes("rx 7800 xt") || text.includes("rx7800xt")) amdChipsets[3].count++
-    if (text.includes("rx 7700 xt") || text.includes("rx7700xt")) amdChipsets[4].count++
-  })
-
-  filters.push({
-    id: "amd-chipset",
-    label: "AMD 칩셋",
-    options: amdChipsets.filter((c) => c.count > 0),
-    isOpen: true,
-  })
 
   // 7. 인텔 칩셋
   const intelChipsets = [
@@ -556,13 +575,103 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    if (text.includes("arc b580") || text.includes("arcb580")) intelChipsets[0].count++
-    if (text.includes("arc b570") || text.includes("arcb570")) intelChipsets[1].count++
-    if (text.includes("arc a770") || text.includes("arca770")) intelChipsets[2].count++
-    if (text.includes("arc a750") || text.includes("arca750")) intelChipsets[3].count++
-    if (text.includes("arc a380") || text.includes("arca380")) intelChipsets[4].count++
+    // 제조사 카운팅
+    if (text.includes("msi")) manufacturers[0].count++
+    if (text.includes("palit")) manufacturers[1].count++
+    if (text.includes("gigabyte")) manufacturers[2].count++
+    if (text.includes("asus")) manufacturers[3].count++
+    if (text.includes("이엠텍") || text.includes("emtek")) manufacturers[4].count++
+
+    // 칩셋 제조사 카운팅
+    if (text.includes("nvidia") || text.includes("rtx") || text.includes("gtx")) chipsetManufacturers[0].count++
+    if (text.includes("amd") || text.includes("radeon") || text.includes("rx")) chipsetManufacturers[1].count++
+    if (text.includes("intel") || text.includes("arc")) chipsetManufacturers[2].count++
+    if (text.includes("matrox")) chipsetManufacturers[3].count++
+    if (text.includes("furiosa")) chipsetManufacturers[4].count++
+
+    // 제품 시리즈 카운팅
+    if (text.includes("rtx 50") || text.includes("5090") || text.includes("5080") || text.includes("5070"))
+      productSeries[0].count++
+    if (text.includes("rtx 40") || text.includes("4090") || text.includes("4080") || text.includes("4070"))
+      productSeries[1].count++
+    if (text.includes("rtx 30") || text.includes("3090") || text.includes("3080") || text.includes("3070"))
+      productSeries[2].count++
+    if (text.includes("rx 9") || text.includes("9070")) productSeries[3].count++
+    if (text.includes("rx 7") || text.includes("7900") || text.includes("7800") || text.includes("7700"))
+      productSeries[4].count++
+
+    // GPU 제조 공정 카운팅
+    if (text.includes("4nm")) gpuProcess[0].count++
+    if (text.includes("8nm")) gpuProcess[1].count++
+    if (text.includes("12nm")) gpuProcess[2].count++
+    if (text.includes("14nm")) gpuProcess[3].count++
+    if (text.includes("16nm")) gpuProcess[4].count++
+
+    // NVIDIA 칩셋 카운팅
+    if (text.includes("5090")) nvidiaChipsets[0].count++
+    if (text.includes("5080")) nvidiaChipsets[1].count++
+    if (text.includes("5070") && !text.includes("ti")) nvidiaChipsets[2].count++
+    if (text.includes("5070 ti")) nvidiaChipsets[3].count++
+    if (text.includes("5060")) nvidiaChipsets[4].count++
+
+    // AMD 칩셋 카운팅
+    if (text.includes("9070 xt")) amdChipsets[0].count++
+    if (text.includes("9070") && !text.includes("xt")) amdChipsets[1].count++
+    if (text.includes("7900 xtx")) amdChipsets[2].count++
+    if (text.includes("7800 xt")) amdChipsets[3].count++
+    if (text.includes("7700 xt")) amdChipsets[4].count++
+
+    // 인텔 칩셋 카운팅
+    if (text.includes("b580")) intelChipsets[0].count++
+    if (text.includes("b570")) intelChipsets[1].count++
+    if (text.includes("a770")) intelChipsets[2].count++
+    if (text.includes("a750")) intelChipsets[3].count++
+    if (text.includes("a380")) intelChipsets[4].count++
+  })
+
+  // 필터 추가
+  filters.push({
+    id: "manufacturer",
+    label: "제조사",
+    options: manufacturers.filter((m) => m.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "chipset-manufacturer",
+    label: "칩셋 제조사",
+    options: chipsetManufacturers.filter((m) => m.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "product-series",
+    label: "제품 시리즈",
+    options: productSeries.filter((s) => s.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "gpu-process",
+    label: "GPU 제조 공정",
+    options: gpuProcess.filter((p) => p.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "nvidia-chipset",
+    label: "NVIDIA 칩셋",
+    options: nvidiaChipsets.filter((c) => c.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "amd-chipset",
+    label: "AMD 칩셋",
+    options: amdChipsets.filter((c) => c.count > 0),
+    isOpen: true,
   })
 
   filters.push({
@@ -575,7 +684,7 @@ function generateVgaFilters(components: FirebaseComponentData[]): FilterCategory
   return filters
 }
 
-// 메모리 전용 필터 생성
+// 메모리 전용 필터 생성 - 상세 버전
 function generateMemoryFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
 
@@ -586,26 +695,7 @@ function generateMemoryFilters(components: FirebaseComponentData[]): FilterCateg
     { id: "마이크론", label: "마이크론", count: 0 },
     { id: "essencore", label: "ESSENCORE", count: 0 },
     { id: "sk하이닉스", label: "SK하이닉스", count: 0 },
-    { id: "g-skill", label: "G.Skill", count: 0 },
   ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("삼성") || text.includes("samsung")) manufacturers[0].count++
-    if (text.includes("teamgroup") || text.includes("팀그룹")) manufacturers[1].count++
-    if (text.includes("마이크론") || text.includes("micron") || text.includes("crucial")) manufacturers[2].count++
-    if (text.includes("essencore")) manufacturers[3].count++
-    if (text.includes("sk하이닉스") || text.includes("hynix")) manufacturers[4].count++
-    if (text.includes("gskill") || text.includes("g.skill")) manufacturers[5].count++
-  })
-
-  filters.push({
-    id: "manufacturer",
-    label: "제조사",
-    options: manufacturers.filter((m) => m.count > 0),
-    isOpen: true,
-  })
 
   // 2. 사용 장치
   const usageTypes = [
@@ -614,44 +704,13 @@ function generateMemoryFilters(components: FirebaseComponentData[]): FilterCateg
     { id: "서버용", label: "서버용", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("데스크탑") || text.includes("desktop")) usageTypes[0].count++
-    if (text.includes("노트북") || text.includes("laptop") || text.includes("sodimm")) usageTypes[1].count++
-    if (text.includes("서버") || text.includes("server") || text.includes("ecc")) usageTypes[2].count++
-  })
-
-  filters.push({
-    id: "usage-type",
-    label: "사용 장치",
-    options: usageTypes.filter((u) => u.count > 0),
-    isOpen: true,
-  })
-
   // 3. 제품 분류
-  const memoryTypes = [
+  const productTypes = [
     { id: "ddr5", label: "DDR5", count: 0 },
     { id: "ddr4", label: "DDR4", count: 0 },
     { id: "ddr3", label: "DDR3", count: 0 },
     { id: "ddr2", label: "DDR2", count: 0 },
   ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("ddr5")) memoryTypes[0].count++
-    if (text.includes("ddr4")) memoryTypes[1].count++
-    if (text.includes("ddr3")) memoryTypes[2].count++
-    if (text.includes("ddr2")) memoryTypes[3].count++
-  })
-
-  filters.push({
-    id: "memory-type",
-    label: "제품 분류",
-    options: memoryTypes.filter((m) => m.count > 0),
-    isOpen: true,
-  })
 
   // 4. 메모리 용량
   const capacities = [
@@ -662,40 +721,110 @@ function generateMemoryFilters(components: FirebaseComponentData[]): FilterCateg
     { id: "4gb", label: "4GB", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+  // 5. 동작클럭(대역폭)
+  const clockSpeeds = [
+    { id: "8800mhz", label: "8800MHz (PC5-70400)", count: 0 },
+    { id: "8400mhz", label: "8400MHz (PC5-67200)", count: 0 },
+    { id: "8200mhz", label: "8200MHz (PC5-65600)", count: 0 },
+    { id: "8000mhz", label: "8000MHz (PC5-64000)", count: 0 },
+    { id: "7800mhz", label: "7800MHz (PC5-62400)", count: 0 },
+  ]
 
+  // 6. 레이턴시
+  const latencies = [
+    { id: "cl14", label: "CL14", count: 0 },
+    { id: "cl15", label: "CL15", count: 0 },
+    { id: "cl16", label: "CL16", count: 0 },
+    { id: "cl17", label: "CL17", count: 0 },
+    { id: "cl18", label: "CL18", count: 0 },
+  ]
+
+  // 7. 동작전압
+  const voltages = [
+    { id: "1.10v", label: "1.10V", count: 0 },
+    { id: "1.20v", label: "1.20V", count: 0 },
+    { id: "1.25v", label: "1.25V", count: 0 },
+    { id: "1.35v", label: "1.35V", count: 0 },
+    { id: "1.50v", label: "1.50V", count: 0 },
+  ]
+
+  components.forEach((component) => {
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
+
+    // 제조사 카운팅
+    if (text.includes("삼성") || text.includes("samsung")) manufacturers[0].count++
+    if (text.includes("teamgroup") || text.includes("팀그룹")) manufacturers[1].count++
+    if (text.includes("마이크론") || text.includes("micron") || text.includes("crucial")) manufacturers[2].count++
+    if (text.includes("essencore")) manufacturers[3].count++
+    if (text.includes("sk하이닉스") || text.includes("hynix")) manufacturers[4].count++
+
+    // 사용 장치 카운팅
+    if (text.includes("데스크탑") || text.includes("desktop")) usageTypes[0].count++
+    if (text.includes("노트북") || text.includes("laptop") || text.includes("sodimm")) usageTypes[1].count++
+    if (text.includes("서버") || text.includes("server") || text.includes("ecc")) usageTypes[2].count++
+
+    // 제품 분류 카운팅
+    if (text.includes("ddr5")) productTypes[0].count++
+    if (text.includes("ddr4")) productTypes[1].count++
+    if (text.includes("ddr3")) productTypes[2].count++
+    if (text.includes("ddr2")) productTypes[3].count++
+
+    // 메모리 용량 카운팅
     if (text.includes("64gb")) capacities[0].count++
     if (text.includes("32gb")) capacities[1].count++
     if (text.includes("16gb")) capacities[2].count++
     if (text.includes("8gb")) capacities[3].count++
     if (text.includes("4gb")) capacities[4].count++
+
+    // 동작클럭 카운팅
+    if (text.includes("8800") || text.includes("pc5-70400")) clockSpeeds[0].count++
+    if (text.includes("8400") || text.includes("pc5-67200")) clockSpeeds[1].count++
+    if (text.includes("8200") || text.includes("pc5-65600")) clockSpeeds[2].count++
+    if (text.includes("8000") || text.includes("pc5-64000")) clockSpeeds[3].count++
+    if (text.includes("7800") || text.includes("pc5-62400")) clockSpeeds[4].count++
+
+    // 레이턴시 카운팅
+    if (text.includes("cl14")) latencies[0].count++
+    if (text.includes("cl15")) latencies[1].count++
+    if (text.includes("cl16")) latencies[2].count++
+    if (text.includes("cl17")) latencies[3].count++
+    if (text.includes("cl18")) latencies[4].count++
+
+    // 동작전압 카운팅
+    if (text.includes("1.10v")) voltages[0].count++
+    if (text.includes("1.20v")) voltages[1].count++
+    if (text.includes("1.25v")) voltages[2].count++
+    if (text.includes("1.35v")) voltages[3].count++
+    if (text.includes("1.50v")) voltages[4].count++
   })
 
+  // 필터 추가
   filters.push({
-    id: "memory-capacity",
-    label: "메모리 용량",
-    options: capacities.filter((c) => c.count > 0),
+    id: "manufacturer",
+    label: "제조사",
+    options: manufacturers.filter((m) => m.count > 0),
     isOpen: true,
   })
 
-  // 5. 동작클럭(대역폭)
-  const clockSpeeds = [
-    { id: "8800mhz", label: "8800MHz (PC5-7", count: 0 },
-    { id: "8400mhz", label: "8400MHz (PC5-6", count: 0 },
-    { id: "8200mhz", label: "8200MHz (PC5-6", count: 0 },
-    { id: "8000mhz", label: "8000MHz (PC5-6", count: 0 },
-    { id: "7800mhz", label: "7800MHz (PC5-6", count: 0 },
-  ]
+  filters.push({
+    id: "usage-type",
+    label: "사용 장치",
+    options: usageTypes.filter((u) => u.count > 0),
+    isOpen: true,
+  })
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+  filters.push({
+    id: "product-type",
+    label: "제품 분류",
+    options: productTypes.filter((p) => p.count > 0),
+    isOpen: true,
+  })
 
-    if (text.includes("8800mhz") || text.includes("8800 mhz")) clockSpeeds[0].count++
-    if (text.includes("8400mhz") || text.includes("8400 mhz")) clockSpeeds[1].count++
-    if (text.includes("8200mhz") || text.includes("8200 mhz")) clockSpeeds[2].count++
-    if (text.includes("8000mhz") || text.includes("8000 mhz")) clockSpeeds[3].count++
-    if (text.includes("7800mhz") || text.includes("7800 mhz")) clockSpeeds[4].count++
+  filters.push({
+    id: "capacity",
+    label: "메모리 용량",
+    options: capacities.filter((c) => c.count > 0),
+    isOpen: true,
   })
 
   filters.push({
@@ -705,49 +834,11 @@ function generateMemoryFilters(components: FirebaseComponentData[]): FilterCateg
     isOpen: true,
   })
 
-  // 6. 램타이밍
-  const timings = [
-    { id: "cl14", label: "CL14", count: 0 },
-    { id: "cl15", label: "CL15", count: 0 },
-    { id: "cl16", label: "CL16", count: 0 },
-    { id: "cl17", label: "CL17", count: 0 },
-    { id: "cl18", label: "CL18", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("cl14") || text.includes("cl 14")) timings[0].count++
-    if (text.includes("cl15") || text.includes("cl 15")) timings[1].count++
-    if (text.includes("cl16") || text.includes("cl 16")) timings[2].count++
-    if (text.includes("cl17") || text.includes("cl 17")) timings[3].count++
-    if (text.includes("cl18") || text.includes("cl 18")) timings[4].count++
-  })
-
   filters.push({
-    id: "timing",
-    label: "램타이밍",
-    options: timings.filter((t) => t.count > 0),
+    id: "latency",
+    label: "레이턴시",
+    options: latencies.filter((l) => l.count > 0),
     isOpen: true,
-  })
-
-  // 7. 동작전압
-  const voltages = [
-    { id: "1-10v", label: "1.10V", count: 0 },
-    { id: "1-20v", label: "1.20V", count: 0 },
-    { id: "1-25v", label: "1.25V", count: 0 },
-    { id: "1-35v", label: "1.35V", count: 0 },
-    { id: "1-50v", label: "1.50V", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("1.10v") || text.includes("1.1v")) voltages[0].count++
-    if (text.includes("1.20v") || text.includes("1.2v")) voltages[1].count++
-    if (text.includes("1.25v")) voltages[2].count++
-    if (text.includes("1.35v")) voltages[3].count++
-    if (text.includes("1.50v") || text.includes("1.5v")) voltages[4].count++
   })
 
   filters.push({
@@ -760,53 +851,324 @@ function generateMemoryFilters(components: FirebaseComponentData[]): FilterCateg
   return filters
 }
 
-// SSD 전용 필터 생성
+// SSD 전용 필터 생성 - 매우 상세한 버전 (스크린샷 기반)
 function generateSsdFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
 
-  // 1. 제조사 필터
+  // 1. 제조사 필터 - 확장된 버전
   const manufacturers = [
     { id: "삼성전자", label: "삼성전자", count: 0 },
     { id: "sk하이닉스", label: "SK하이닉스", count: 0 },
     { id: "마이크론", label: "마이크론", count: 0 },
     { id: "western-digital", label: "Western Digital", count: 0 },
     { id: "adata", label: "ADATA", count: 0 },
+    { id: "kingston", label: "Kingston", count: 0 },
+    { id: "seagate", label: "Seagate", count: 0 },
+    { id: "intel", label: "Intel", count: 0 },
+    { id: "sandisk", label: "SanDisk", count: 0 },
+    { id: "corsair", label: "Corsair", count: 0 },
+    { id: "gigabyte", label: "GIGABYTE", count: 0 },
+    { id: "msi", label: "MSI", count: 0 },
+    { id: "teamgroup", label: "TeamGroup", count: 0 },
+    { id: "patriot", label: "Patriot", count: 0 },
+    { id: "pny", label: "PNY", count: 0 },
+  ]
+
+  // 2. 폼팩터 - 확장된 버전
+  const formFactors = [
+    { id: "m2-2280", label: "M.2 (2280)", count: 0 },
+    { id: "6.4cm-2.5", label: "6.4cm(2.5형)", count: 0 },
+    { id: "m2-2230", label: "M.2 (2230)", count: 0 },
+    { id: "m2-2242", label: "M.2 (2242)", count: 0 },
+    { id: "mini-sata", label: "Mini SATA(mSATA)", count: 0 },
+    { id: "m2-22110", label: "M.2 (22110)", count: 0 },
+    { id: "m2-2260", label: "M.2 (2260)", count: 0 },
+    { id: "pcie-card", label: "PCIe 카드형", count: 0 },
+  ]
+
+  // 3. 인터페이스 - 확장된 버전
+  const interfaces = [
+    { id: "pcie5.0x4-128g", label: "PCIe5.0×4 (128Gbps)", count: 0 },
+    { id: "pcie4.0x4-64g", label: "PCIe4.0×4 (64Gbps)", count: 0 },
+    { id: "pcie3.0x4-32g", label: "PCIe3.0×4 (32Gbps)", count: 0 },
+    { id: "pcie3.0x2-16g", label: "PCIe3.0×2 (16Gbps)", count: 0 },
+    { id: "sata3-6g", label: "SATA3 (6Gb/s)", count: 0 },
+    { id: "sata2-3g", label: "SATA2 (3Gb/s)", count: 0 },
+    { id: "usb3.0", label: "USB 3.0", count: 0 },
+    { id: "thunderbolt", label: "Thunderbolt", count: 0 },
+  ]
+
+  // 4. 프로토콜 - 확장된 버전
+  const protocols = [
+    { id: "nvme-2.0", label: "NVMe 2.0", count: 0 },
+    { id: "nvme-1.4", label: "NVMe 1.4", count: 0 },
+    { id: "nvme-1.3", label: "NVMe 1.3", count: 0 },
+    { id: "nvme-1.2", label: "NVMe 1.2", count: 0 },
+    { id: "nvme-1.1", label: "NVMe 1.1", count: 0 },
+    { id: "nvme", label: "NVMe", count: 0 },
+    { id: "ahci", label: "AHCI", count: 0 },
+  ]
+
+  // 5. 용량 - 매우 상세한 버전
+  const capacities = [
+    { id: "8tb-above", label: "8TB 이상", count: 0 },
+    { id: "4tb-7.9tb", label: "4TB~7.9TB", count: 0 },
+    { id: "2tb-3.9tb", label: "2TB~3.9TB", count: 0 },
+    { id: "1tb-1.9tb", label: "1TB~1.9TB", count: 0 },
+    { id: "500gb-999gb", label: "500GB~999GB", count: 0 },
+    { id: "250gb-499gb", label: "250GB~499GB", count: 0 },
+    { id: "120gb-249gb", label: "120GB~249GB", count: 0 },
+    { id: "64gb-119gb", label: "64GB~119GB", count: 0 },
+    { id: "32gb-63gb", label: "32GB~63GB", count: 0 },
+    { id: "under-32gb", label: "32GB 미만", count: 0 },
+  ]
+
+  // 6. 메모리 타입 - 확장된 버전
+  const memoryTypes = [
+    { id: "tlc", label: "TLC", count: 0 },
+    { id: "qlc", label: "QLC", count: 0 },
+    { id: "mlc", label: "MLC", count: 0 },
+    { id: "slc", label: "SLC", count: 0 },
+    { id: "3d-tlc", label: "3D TLC", count: 0 },
+    { id: "3d-qlc", label: "3D QLC", count: 0 },
+    { id: "3d-mlc", label: "3D MLC", count: 0 },
+    { id: "v-nand", label: "V-NAND", count: 0 },
+  ]
+
+  // 7. 낸드 구조 - 확장된 버전
+  const nandStructures = [
+    { id: "3d-nand", label: "3D낸드", count: 0 },
+    { id: "2d-nand", label: "2D낸드", count: 0 },
+    { id: "v-nand", label: "V-NAND", count: 0 },
+    { id: "3d-v-nand", label: "3D V-NAND", count: 0 },
+    { id: "planar-nand", label: "Planar NAND", count: 0 },
+  ]
+
+  // 8. 읽기 속도 (새로 추가)
+  const readSpeeds = [
+    { id: "7000mb-above", label: "7,000MB/s 이상", count: 0 },
+    { id: "6000-6999mb", label: "6,000~6,999MB/s", count: 0 },
+    { id: "5000-5999mb", label: "5,000~5,999MB/s", count: 0 },
+    { id: "4000-4999mb", label: "4,000~4,999MB/s", count: 0 },
+    { id: "3000-3999mb", label: "3,000~3,999MB/s", count: 0 },
+    { id: "2000-2999mb", label: "2,000~2,999MB/s", count: 0 },
+    { id: "1000-1999mb", label: "1,000~1,999MB/s", count: 0 },
+    { id: "500-999mb", label: "500~999MB/s", count: 0 },
+    { id: "under-500mb", label: "500MB/s 미만", count: 0 },
+  ]
+
+  // 9. 쓰기 속도 (새로 추가)
+  const writeSpeeds = [
+    { id: "6000mb-above", label: "6,000MB/s 이상", count: 0 },
+    { id: "5000-5999mb", label: "5,000~5,999MB/s", count: 0 },
+    { id: "4000-4999mb", label: "4,000~4,999MB/s", count: 0 },
+    { id: "3000-3999mb", label: "3,000~3,999MB/s", count: 0 },
+    { id: "2000-2999mb", label: "2,000~2,999MB/s", count: 0 },
+    { id: "1000-1999mb", label: "1,000~1,999MB/s", count: 0 },
+    { id: "500-999mb", label: "500~999MB/s", count: 0 },
+    { id: "under-500mb", label: "500MB/s 미만", count: 0 },
+  ]
+
+  // 10. DRAM 캐시 (새로 추가)
+  const dramCache = [
+    { id: "dram-cache", label: "DRAM 캐시", count: 0 },
+    { id: "no-dram", label: "DRAM-less", count: 0 },
+    { id: "slc-cache", label: "SLC 캐시", count: 0 },
+    { id: "hmb", label: "HMB 지원", count: 0 },
+  ]
+
+  // 11. 보증 기간 (새로 추가)
+  const warrantyPeriods = [
+    { id: "10years", label: "10년", count: 0 },
+    { id: "7years", label: "7년", count: 0 },
+    { id: "5years", label: "5년", count: 0 },
+    { id: "3years", label: "3년", count: 0 },
+    { id: "2years", label: "2년", count: 0 },
+    { id: "1year", label: "1년", count: 0 },
+  ]
+
+  // 12. 사용 목적 (새로 추가)
+  const usagePurpose = [
+    { id: "gaming", label: "게이밍", count: 0 },
+    { id: "professional", label: "전문가용", count: 0 },
+    { id: "enterprise", label: "기업용", count: 0 },
+    { id: "mainstream", label: "일반용", count: 0 },
+    { id: "budget", label: "보급형", count: 0 },
+    { id: "portable", label: "휴대용", count: 0 },
+  ]
+
+  // 13. 내구성 등급 (새로 추가)
+  const enduranceRating = [
+    { id: "3000tbw-above", label: "3,000TBW 이상", count: 0 },
+    { id: "2000-2999tbw", label: "2,000~2,999TBW", count: 0 },
+    { id: "1000-1999tbw", label: "1,000~1,999TBW", count: 0 },
+    { id: "500-999tbw", label: "500~999TBW", count: 0 },
+    { id: "200-499tbw", label: "200~499TBW", count: 0 },
+    { id: "100-199tbw", label: "100~199TBW", count: 0 },
+    { id: "under-100tbw", label: "100TBW 미만", count: 0 },
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
+    // 제조사 카운팅 - 확장된 버전
     if (text.includes("삼성") || text.includes("samsung")) manufacturers[0].count++
     if (text.includes("sk하이닉스") || text.includes("hynix")) manufacturers[1].count++
     if (text.includes("마이크론") || text.includes("micron") || text.includes("crucial")) manufacturers[2].count++
     if (text.includes("western digital") || text.includes("wd")) manufacturers[3].count++
     if (text.includes("adata")) manufacturers[4].count++
+    if (text.includes("kingston")) manufacturers[5].count++
+    if (text.includes("seagate")) manufacturers[6].count++
+    if (text.includes("intel")) manufacturers[7].count++
+    if (text.includes("sandisk")) manufacturers[8].count++
+    if (text.includes("corsair")) manufacturers[9].count++
+    if (text.includes("gigabyte")) manufacturers[10].count++
+    if (text.includes("msi")) manufacturers[11].count++
+    if (text.includes("teamgroup") || text.includes("팀그룹")) manufacturers[12].count++
+    if (text.includes("patriot")) manufacturers[13].count++
+    if (text.includes("pny")) manufacturers[14].count++
+
+    // 폼팩터 카운팅 - 확장된 버전
+    if (text.includes("m.2") && text.includes("2280")) formFactors[0].count++
+    if (text.includes("2.5") || text.includes("6.4cm")) formFactors[1].count++
+    if (text.includes("m.2") && text.includes("2230")) formFactors[2].count++
+    if (text.includes("m.2") && text.includes("2242")) formFactors[3].count++
+    if (text.includes("msata") || text.includes("mini sata")) formFactors[4].count++
+    if (text.includes("m.2") && text.includes("22110")) formFactors[5].count++
+    if (text.includes("m.2") && text.includes("2260")) formFactors[6].count++
+    if (text.includes("pcie") && text.includes("카드")) formFactors[7].count++
+
+    // 인터페이스 카운팅 - 확장된 버전
+    if (text.includes("pcie 5.0") || text.includes("pcie5.0")) interfaces[0].count++
+    if (text.includes("pcie 4.0") || text.includes("pcie4.0")) interfaces[1].count++
+    if (text.includes("pcie 3.0") && text.includes("x4")) interfaces[2].count++
+    if (text.includes("pcie 3.0") && text.includes("x2")) interfaces[3].count++
+    if (text.includes("sata3") || text.includes("sata 3")) interfaces[4].count++
+    if (text.includes("sata2") || text.includes("sata 2")) interfaces[5].count++
+    if (text.includes("usb 3.0") || text.includes("usb3.0")) interfaces[6].count++
+    if (text.includes("thunderbolt")) interfaces[7].count++
+
+    // 프로토콜 카운팅 - 확장된 버전
+    if (text.includes("nvme 2.0")) protocols[0].count++
+    if (text.includes("nvme 1.4")) protocols[1].count++
+    if (text.includes("nvme 1.3")) protocols[2].count++
+    if (text.includes("nvme 1.2")) protocols[3].count++
+    if (text.includes("nvme 1.1")) protocols[4].count++
+    if (text.includes("nvme")) protocols[5].count++
+    if (text.includes("ahci")) protocols[6].count++
+
+    // 용량 카운팅 - 매우 상세한 버전
+    const capacityMatch = text.match(/(\d+(?:\.\d+)?)\s*(tb|gb)/i)
+    if (capacityMatch) {
+      const value = Number.parseFloat(capacityMatch[1])
+      const unit = capacityMatch[2].toLowerCase()
+      const gbValue = unit === "tb" ? value * 1000 : value
+
+      if (gbValue >= 8000) capacities[0].count++
+      else if (gbValue >= 4000) capacities[1].count++
+      else if (gbValue >= 2000) capacities[2].count++
+      else if (gbValue >= 1000) capacities[3].count++
+      else if (gbValue >= 500) capacities[4].count++
+      else if (gbValue >= 250) capacities[5].count++
+      else if (gbValue >= 120) capacities[6].count++
+      else if (gbValue >= 64) capacities[7].count++
+      else if (gbValue >= 32) capacities[8].count++
+      else capacities[9].count++
+    }
+
+    // 메모리 타입 카운팅 - 확장된 버전
+    if (text.includes("3d tlc")) memoryTypes[4].count++
+    else if (text.includes("tlc")) memoryTypes[0].count++
+    if (text.includes("3d qlc")) memoryTypes[5].count++
+    else if (text.includes("qlc")) memoryTypes[1].count++
+    if (text.includes("3d mlc")) memoryTypes[6].count++
+    else if (text.includes("mlc")) memoryTypes[2].count++
+    if (text.includes("slc")) memoryTypes[3].count++
+    if (text.includes("v-nand")) memoryTypes[7].count++
+
+    // 낸드 구조 카운팅 - 확장된 버전
+    if (text.includes("3d v-nand")) nandStructures[3].count++
+    else if (text.includes("3d") || text.includes("3d nand")) nandStructures[0].count++
+    else if (text.includes("v-nand")) nandStructures[2].count++
+    if (text.includes("2d") || text.includes("2d nand")) nandStructures[1].count++
+    if (text.includes("planar")) nandStructures[4].count++
+
+    // 읽기 속도 카운팅
+    const readSpeedMatch = text.match(/읽기.*?(\d+(?:,\d+)?)\s*mb\/s/i) || text.match(/read.*?(\d+(?:,\d+)?)\s*mb\/s/i)
+    if (readSpeedMatch) {
+      const speed = Number.parseInt(readSpeedMatch[1].replace(/,/g, ""))
+      if (speed >= 7000) readSpeeds[0].count++
+      else if (speed >= 6000) readSpeeds[1].count++
+      else if (speed >= 5000) readSpeeds[2].count++
+      else if (speed >= 4000) readSpeeds[3].count++
+      else if (speed >= 3000) readSpeeds[4].count++
+      else if (speed >= 2000) readSpeeds[5].count++
+      else if (speed >= 1000) readSpeeds[6].count++
+      else if (speed >= 500) readSpeeds[7].count++
+      else readSpeeds[8].count++
+    }
+
+    // 쓰기 속도 카운팅
+    const writeSpeedMatch =
+      text.match(/쓰기.*?(\d+(?:,\d+)?)\s*mb\/s/i) || text.match(/write.*?(\d+(?:,\d+)?)\s*mb\/s/i)
+    if (writeSpeedMatch) {
+      const speed = Number.parseInt(writeSpeedMatch[1].replace(/,/g, ""))
+      if (speed >= 6000) writeSpeeds[0].count++
+      else if (speed >= 5000) writeSpeeds[1].count++
+      else if (speed >= 4000) writeSpeeds[2].count++
+      else if (speed >= 3000) writeSpeeds[3].count++
+      else if (speed >= 2000) writeSpeeds[4].count++
+      else if (speed >= 1000) writeSpeeds[5].count++
+      else if (speed >= 500) writeSpeeds[6].count++
+      else writeSpeeds[7].count++
+    }
+
+    // DRAM 캐시 카운팅
+    if (text.includes("dram") && !text.includes("dram-less")) dramCache[0].count++
+    if (text.includes("dram-less") || text.includes("dramless")) dramCache[1].count++
+    if (text.includes("slc 캐시") || text.includes("slc cache")) dramCache[2].count++
+    if (text.includes("hmb")) dramCache[3].count++
+
+    // 보증 기간 카운팅
+    const warrantyMatch = text.match(/(\d+)년.*?보증/i) || text.match(/warranty.*?(\d+)\s*year/i)
+    if (warrantyMatch) {
+      const years = Number.parseInt(warrantyMatch[1])
+      if (years >= 10) warrantyPeriods[0].count++
+      else if (years >= 7) warrantyPeriods[1].count++
+      else if (years >= 5) warrantyPeriods[2].count++
+      else if (years >= 3) warrantyPeriods[3].count++
+      else if (years >= 2) warrantyPeriods[4].count++
+      else warrantyPeriods[5].count++
+    }
+
+    // 사용 목적 카운팅
+    if (text.includes("게이밍") || text.includes("gaming")) usagePurpose[0].count++
+    if (text.includes("전문가") || text.includes("professional") || text.includes("pro")) usagePurpose[1].count++
+    if (text.includes("기업") || text.includes("enterprise")) usagePurpose[2].count++
+    if (text.includes("일반") || text.includes("mainstream")) usagePurpose[3].count++
+    if (text.includes("보급") || text.includes("budget") || text.includes("value")) usagePurpose[4].count++
+    if (text.includes("휴대") || text.includes("portable") || text.includes("external")) usagePurpose[5].count++
+
+    // 내구성 등급 카운팅
+    const tbwMatch = text.match(/(\d+(?:,\d+)?)\s*tbw/i)
+    if (tbwMatch) {
+      const tbw = Number.parseInt(tbwMatch[1].replace(/,/g, ""))
+      if (tbw >= 3000) enduranceRating[0].count++
+      else if (tbw >= 2000) enduranceRating[1].count++
+      else if (tbw >= 1000) enduranceRating[2].count++
+      else if (tbw >= 500) enduranceRating[3].count++
+      else if (tbw >= 200) enduranceRating[4].count++
+      else if (tbw >= 100) enduranceRating[5].count++
+      else enduranceRating[6].count++
+    }
   })
 
+  // 필터 추가
   filters.push({
     id: "manufacturer",
     label: "제조사",
     options: manufacturers.filter((m) => m.count > 0),
     isOpen: true,
-  })
-
-  // 2. 폼팩터
-  const formFactors = [
-    { id: "m2-2280", label: "M.2 (2280)", count: 0 },
-    { id: "64cm25형", label: "6.4cm(2.5형)", count: 0 },
-    { id: "m2-2230", label: "M.2 (2230)", count: 0 },
-    { id: "m2-2242", label: "M.2 (2242)", count: 0 },
-    { id: "mini-satamsat", label: "Mini SATA(mSAT", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("m.2") && text.includes("2280")) formFactors[0].count++
-    if (text.includes("2.5") || text.includes("6.4cm")) formFactors[1].count++
-    if (text.includes("m.2") && text.includes("2230")) formFactors[2].count++
-    if (text.includes("m.2") && text.includes("2242")) formFactors[3].count++
-    if (text.includes("mini sata") || text.includes("msat")) formFactors[4].count++
   })
 
   filters.push({
@@ -816,59 +1178,11 @@ function generateSsdFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 3. 인터페이스
-  const interfaces = [
-    { id: "pcie50x4", label: "PCIe5.0×4 (128G", count: 0 },
-    { id: "pcie40x4", label: "PCIe4.0×4 (64G", count: 0 },
-    { id: "pcie30x4", label: "PCIe3.0×4 (32G", count: 0 },
-    { id: "pcie30x2", label: "PCIe3.0×2 (16GT/", count: 0 },
-    { id: "sata3", label: "SATA3 (6Gb/s)", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("pcie5.0") || text.includes("pcie 5.0") || text.includes("pcie5") || text.includes("pcie 5"))
-      interfaces[0].count++
-    if (text.includes("pcie4.0") || text.includes("pcie 4.0") || text.includes("pcie4") || text.includes("pcie 4"))
-      interfaces[1].count++
-    if (
-      (text.includes("pcie3.0") || text.includes("pcie 3.0") || text.includes("pcie3") || text.includes("pcie 3")) &&
-      text.includes("x4")
-    )
-      interfaces[2].count++
-    if (
-      (text.includes("pcie3.0") || text.includes("pcie 3.0") || text.includes("pcie3") || text.includes("pcie 3")) &&
-      text.includes("x2")
-    )
-      interfaces[3].count++
-    if (text.includes("sata3") || text.includes("sata 3") || text.includes("6gb/s")) interfaces[4].count++
-  })
-
   filters.push({
     id: "interface",
     label: "인터페이스",
     options: interfaces.filter((i) => i.count > 0),
     isOpen: true,
-  })
-
-  // 4. 프로토콜
-  const protocols = [
-    { id: "nvme-20", label: "NVMe 2.0", count: 0 },
-    { id: "nvme-14", label: "NVMe 1.4", count: 0 },
-    { id: "nvme-13", label: "NVMe 1.3", count: 0 },
-    { id: "nvme-12", label: "NVMe 1.2", count: 0 },
-    { id: "nvme", label: "NVMe", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("nvme 2.0") || text.includes("nvme2.0")) protocols[0].count++
-    else if (text.includes("nvme 1.4") || text.includes("nvme1.4")) protocols[1].count++
-    else if (text.includes("nvme 1.3") || text.includes("nvme1.3")) protocols[2].count++
-    else if (text.includes("nvme 1.2") || text.includes("nvme1.2")) protocols[3].count++
-    else if (text.includes("nvme")) protocols[4].count++
   })
 
   filters.push({
@@ -878,49 +1192,11 @@ function generateSsdFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 5. 용량
-  const capacities = [
-    { id: "4tb3tb", label: "4TB~3TB", count: 0 },
-    { id: "2tb11tb", label: "2TB~1.1TB", count: 0 },
-    { id: "1tb600gb", label: "1TB~600GB", count: 0 },
-    { id: "525gb270gb", label: "525GB~270GB", count: 0 },
-    { id: "256gb130gb", label: "256GB~130GB", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("4tb") || text.includes("3tb")) capacities[0].count++
-    else if (text.includes("2tb") || text.includes("1.1tb")) capacities[1].count++
-    else if (text.includes("1tb") || text.includes("600gb")) capacities[2].count++
-    else if (text.includes("525gb") || text.includes("500gb") || text.includes("480gb") || text.includes("270gb"))
-      capacities[3].count++
-    else if (text.includes("256gb") || text.includes("250gb") || text.includes("240gb") || text.includes("130gb"))
-      capacities[4].count++
-  })
-
   filters.push({
     id: "capacity",
     label: "용량",
     options: capacities.filter((c) => c.count > 0),
     isOpen: true,
-  })
-
-  // 6. 메모리 타입
-  const memoryTypes = [
-    { id: "tlc", label: "TLC", count: 0 },
-    { id: "qlc", label: "QLC", count: 0 },
-    { id: "mlc", label: "MLC", count: 0 },
-    { id: "slc", label: "SLC", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("tlc")) memoryTypes[0].count++
-    if (text.includes("qlc")) memoryTypes[1].count++
-    if (text.includes("mlc")) memoryTypes[2].count++
-    if (text.includes("slc")) memoryTypes[3].count++
   })
 
   filters.push({
@@ -930,19 +1206,6 @@ function generateSsdFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
-  // 7. 낸드 구조
-  const nandStructures = [
-    { id: "3d낸드", label: "3D낸드", count: 0 },
-    { id: "2d낸드", label: "2D낸드", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("3d") && text.includes("낸드")) nandStructures[0].count++
-    if (text.includes("2d") && text.includes("낸드")) nandStructures[1].count++
-  })
-
   filters.push({
     id: "nand-structure",
     label: "낸드 구조",
@@ -950,10 +1213,52 @@ function generateSsdFilters(components: FirebaseComponentData[]): FilterCategory
     isOpen: true,
   })
 
+  filters.push({
+    id: "read-speed",
+    label: "읽기 속도",
+    options: readSpeeds.filter((r) => r.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "write-speed",
+    label: "쓰기 속도",
+    options: writeSpeeds.filter((w) => w.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "dram-cache",
+    label: "DRAM 캐시",
+    options: dramCache.filter((d) => d.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "warranty-period",
+    label: "보증 기간",
+    options: warrantyPeriods.filter((w) => w.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "usage-purpose",
+    label: "사용 목적",
+    options: usagePurpose.filter((u) => u.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "endurance-rating",
+    label: "내구성 등급",
+    options: enduranceRating.filter((e) => e.count > 0),
+    isOpen: true,
+  })
+
   return filters
 }
 
-// 케이스 전용 필터 생성
+// 케이스 전용 필터 생성 - 상세 버전 (스크린샷 기반)
 function generateCaseFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
 
@@ -966,51 +1271,17 @@ function generateCaseFilters(components: FirebaseComponentData[]): FilterCategor
     { id: "antec", label: "Antec", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("앱코") || text.includes("abko")) manufacturers[0].count++
-    if (text.includes("darkflash")) manufacturers[1].count++
-    if (text.includes("마이크로닉스") || text.includes("micronics")) manufacturers[2].count++
-    if (text.includes("잘만") || text.includes("zalman")) manufacturers[3].count++
-    if (text.includes("antec") || text.includes("안텍")) manufacturers[4].count++
-  })
-
-  filters.push({
-    id: "manufacturer",
-    label: "제조사",
-    options: manufacturers.filter((m) => m.count > 0),
-    isOpen: true,
-  })
-
   // 2. 제품 분류
-  const caseTypes = [
-    { id: "atx-케이스", label: "ATX 케이스", count: 0 },
-    { id: "m-atx-케이스", label: "M-ATX 케이스", count: 0 },
-    { id: "미니itx", label: "미니ITX", count: 0 },
-    { id: "htpc-케이스", label: "HTPC 케이스", count: 0 },
-    { id: "튜닝-케이스", label: "튜닝 케이스", count: 0 },
+  const productTypes = [
+    { id: "atx-case", label: "ATX 케이스", count: 0 },
+    { id: "m-atx-case", label: "M-ATX 케이스", count: 0 },
+    { id: "mini-itx", label: "미니ITX", count: 0 },
+    { id: "htpc-case", label: "HTPC 케이스", count: 0 },
+    { id: "tuning-case", label: "튜닝 케이스", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("atx") && !text.includes("m-atx") && !text.includes("mini")) caseTypes[0].count++
-    if (text.includes("m-atx") || text.includes("matx")) caseTypes[1].count++
-    if (text.includes("mini itx") || text.includes("mitx")) caseTypes[2].count++
-    if (text.includes("htpc")) caseTypes[3].count++
-    if (text.includes("튜닝") || text.includes("tuning")) caseTypes[4].count++
-  })
-
-  filters.push({
-    id: "case-type",
-    label: "제품 분류",
-    options: caseTypes.filter((c) => c.count > 0),
-    isOpen: true,
-  })
-
   // 3. 지원보드규격
-  const boardSupports = [
+  const boardSupport = [
     { id: "atx", label: "ATX", count: 0 },
     { id: "m-atx", label: "M-ATX", count: 0 },
     { id: "itx", label: "ITX", count: 0 },
@@ -1018,43 +1289,123 @@ function generateCaseFilters(components: FirebaseComponentData[]): FilterCategor
     { id: "m-itx", label: "M-ITX", count: 0 },
   ]
 
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+  // 4. VGA 길이
+  const vgaLengths = [
+    { id: "400mm-above", label: "400~ mm", count: 0 },
+    { id: "370-399mm", label: "370~399 mm", count: 0 },
+    { id: "350-369mm", label: "350~369 mm", count: 0 },
+    { id: "330-349mm", label: "330~349 mm", count: 0 },
+    { id: "310-329mm", label: "310~329 mm", count: 0 },
+  ]
 
-    if (text.includes("atx") && !text.includes("m-atx") && !text.includes("e-atx")) boardSupports[0].count++
-    if (text.includes("m-atx") || text.includes("matx")) boardSupports[1].count++
-    if (text.includes("itx") && !text.includes("m-itx")) boardSupports[2].count++
-    if (text.includes("e-atx") || text.includes("eatx")) boardSupports[3].count++
-    if (text.includes("m-itx") || text.includes("mitx")) boardSupports[4].count++
+  // 5. CPU쿨러 높이
+  const coolerHeights = [
+    { id: "200mm-above", label: "200mm 이상", count: 0 },
+    { id: "190-199mm", label: "190~199mm", count: 0 },
+    { id: "180-189mm", label: "180~189mm", count: 0 },
+    { id: "170-179mm", label: "170~179mm", count: 0 },
+    { id: "160-169mm", label: "160~169mm", count: 0 },
+  ]
+
+  // 6. 케이스 크기
+  const caseSizes = [
+    { id: "big-tower", label: "빅타워", count: 0 },
+    { id: "mid-tower", label: "미들타워", count: 0 },
+    { id: "mini-tower", label: "미니타워", count: 0 },
+    { id: "mini-tower-lp", label: "미니타워(LP)", count: 0 },
+    { id: "mini-itx-cube", label: "미니ITX(큐브형)", count: 0 },
+  ]
+
+  // 7. 지원파워규격
+  const powerSupport = [
+    { id: "standard-atx", label: "표준-ATX", count: 0 },
+    { id: "m-atx-sfx", label: "M-ATX(SFX)", count: 0 },
+    { id: "tfx", label: "TFX", count: 0 },
+    { id: "dc-to-dc", label: "DC to DC", count: 0 },
+    { id: "flex", label: "FLEX", count: 0 },
+  ]
+
+  components.forEach((component) => {
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
+
+    // 제조사 카운팅
+    if (text.includes("앱코") || text.includes("abko")) manufacturers[0].count++
+    if (text.includes("darkflash")) manufacturers[1].count++
+    if (text.includes("마이크로닉스") || text.includes("micronics")) manufacturers[2].count++
+    if (text.includes("잘만") || text.includes("zalman")) manufacturers[3].count++
+    if (text.includes("antec") || text.includes("안텍")) manufacturers[4].count++
+
+    // 제품 분류 카운팅
+    if (text.includes("atx 케이스") || (text.includes("atx") && text.includes("케이스"))) productTypes[0].count++
+    if (text.includes("m-atx 케이스") || text.includes("matx 케이스")) productTypes[1].count++
+    if (text.includes("mini itx") || text.includes("미니itx")) productTypes[2].count++
+    if (text.includes("htpc")) productTypes[3].count++
+    if (text.includes("튜닝")) productTypes[4].count++
+
+    // 지원보드규격 카운팅
+    if (text.includes("atx") && !text.includes("m-atx") && !text.includes("e-atx")) boardSupport[0].count++
+    if (text.includes("m-atx") || text.includes("matx")) boardSupport[1].count++
+    if (text.includes("itx") && !text.includes("mini")) boardSupport[2].count++
+    if (text.includes("e-atx") || text.includes("eatx")) boardSupport[3].count++
+    if (text.includes("m-itx") || text.includes("mini-itx")) boardSupport[4].count++
+
+    // VGA 길이 카운팅
+    const vgaMatch = text.match(/vga.*?(\d+)mm/) || text.match(/그래픽.*?(\d+)mm/)
+    if (vgaMatch) {
+      const length = Number.parseInt(vgaMatch[1])
+      if (length >= 400) vgaLengths[0].count++
+      else if (length >= 370) vgaLengths[1].count++
+      else if (length >= 350) vgaLengths[2].count++
+      else if (length >= 330) vgaLengths[3].count++
+      else if (length >= 310) vgaLengths[4].count++
+    }
+
+    // CPU쿨러 높이 카운팅
+    const coolerMatch = text.match(/쿨러.*?(\d+)mm/) || text.match(/cpu.*?(\d+)mm/)
+    if (coolerMatch) {
+      const height = Number.parseInt(coolerMatch[1])
+      if (height >= 200) coolerHeights[0].count++
+      else if (height >= 190) coolerHeights[1].count++
+      else if (height >= 180) coolerHeights[2].count++
+      else if (height >= 170) coolerHeights[3].count++
+      else if (height >= 160) coolerHeights[4].count++
+    }
+
+    // 케이스 크기 카운팅
+    if (text.includes("빅타워") || text.includes("big tower")) caseSizes[0].count++
+    if (text.includes("미들타워") || text.includes("mid tower")) caseSizes[1].count++
+    if (text.includes("미니타워") && !text.includes("lp")) caseSizes[2].count++
+    if (text.includes("미니타워") && text.includes("lp")) caseSizes[3].count++
+    if (text.includes("큐브") || text.includes("cube")) caseSizes[4].count++
+
+    // 지원파워규격 카운팅
+    if (text.includes("표준 atx") || text.includes("standard atx")) powerSupport[0].count++
+    if (text.includes("sfx") || text.includes("m-atx")) powerSupport[1].count++
+    if (text.includes("tfx")) powerSupport[2].count++
+    if (text.includes("dc to dc")) powerSupport[3].count++
+    if (text.includes("flex")) powerSupport[4].count++
+  })
+
+  // 필터 추가
+  filters.push({
+    id: "manufacturer",
+    label: "제조사",
+    options: manufacturers.filter((m) => m.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "product-type",
+    label: "제품 분류",
+    options: productTypes.filter((p) => p.count > 0),
+    isOpen: true,
   })
 
   filters.push({
     id: "board-support",
     label: "지원보드규격",
-    options: boardSupports.filter((b) => b.count > 0),
+    options: boardSupport.filter((b) => b.count > 0),
     isOpen: true,
-  })
-
-  // 4. VGA 길이
-  const vgaLengths = [
-    { id: "400-mm", label: "400~ mm", count: 0 },
-    { id: "370399-mm", label: "370~399 mm", count: 0 },
-    { id: "350369-mm", label: "350~369 mm", count: 0 },
-    { id: "330349-mm", label: "330~349 mm", count: 0 },
-    { id: "310329-mm", label: "310~329 mm", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    // VGA 길이 정보 추출
-    if (text.includes("vga") && text.includes("길이")) {
-      if (text.includes("400mm") || text.match(/4\d\d\s*mm/)) vgaLengths[0].count++
-      else if (text.match(/3[7-9]\d\s*mm/)) vgaLengths[1].count++
-      else if (text.match(/3[5-6]\d\s*mm/)) vgaLengths[2].count++
-      else if (text.match(/3[3-4]\d\s*mm/)) vgaLengths[3].count++
-      else if (text.match(/31\d\s*mm/) || text.match(/32\d\s*mm/)) vgaLengths[4].count++
-    }
   })
 
   filters.push({
@@ -1064,49 +1415,11 @@ function generateCaseFilters(components: FirebaseComponentData[]): FilterCategor
     isOpen: true,
   })
 
-  // 5. CPU쿨러 높이
-  const cpuCoolerHeights = [
-    { id: "200mm-이상", label: "200mm 이상", count: 0 },
-    { id: "190199mm", label: "190~199mm", count: 0 },
-    { id: "180189mm", label: "180~189mm", count: 0 },
-    { id: "170179mm", label: "170~179mm", count: 0 },
-    { id: "160169mm", label: "160~169mm", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("200mm") || text.match(/2\d\d\s*mm/)) cpuCoolerHeights[0].count++
-    else if (text.match(/19\d\s*mm/)) cpuCoolerHeights[1].count++
-    else if (text.match(/18\d\s*mm/)) cpuCoolerHeights[2].count++
-    else if (text.match(/17\d\s*mm/)) cpuCoolerHeights[3].count++
-    else if (text.match(/16\d\s*mm/)) cpuCoolerHeights[4].count++
-  })
-
   filters.push({
-    id: "cpu-coo ler-height",
+    id: "cooler-height",
     label: "CPU쿨러 높이",
-    options: cpuCoolerHeights.filter((c) => c.count > 0),
+    options: coolerHeights.filter((c) => c.count > 0),
     isOpen: true,
-  })
-
-  // 6. 케이스 크기
-  const caseSizes = [
-    { id: "빅타워", label: "빅타워", count: 0 },
-    { id: "미들타워", label: "미들타워", count: 0 },
-    { id: "미니타워", label: "미니타워", count: 0 },
-    { id: "슬림", label: "슬림", count: 0 },
-    { id: "큐브", label: "큐브", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("빅타워") || text.includes("big tower")) caseSizes[0].count++
-    if (text.includes("미들타워") || text.includes("middle tower") || text.includes("mid tower")) caseSizes[1].count++
-    if (text.includes("미니타워") || text.includes("mini tower")) caseSizes[2].count++
-    if (text.includes("슬림") || text.includes("slim")) caseSizes[3].count++
-    if (text.includes("큐브") || text.includes("cube")) caseSizes[4].count++
   })
 
   filters.push({
@@ -1116,274 +1429,140 @@ function generateCaseFilters(components: FirebaseComponentData[]): FilterCategor
     isOpen: true,
   })
 
-  // 7. 지원파워규격
-  const powerSupports = [
-    { id: "atx", label: "ATX", count: 0 },
-    { id: "sfx", label: "SFX", count: 0 },
-    { id: "tfx", label: "TFX", count: 0 },
-    { id: "flex-atx", label: "Flex ATX", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("atx") && !text.includes("flex")) powerSupports[0].count++
-    if (text.includes("sfx")) powerSupports[1].count++
-    if (text.includes("tfx")) powerSupports[2].count++
-    if (text.includes("flex atx") || text.includes("flex-atx")) powerSupports[3].count++
-  })
-
   filters.push({
     id: "power-support",
     label: "지원파워규격",
-    options: powerSupports.filter((p) => p.count > 0),
+    options: powerSupport.filter((p) => p.count > 0),
     isOpen: true,
   })
 
   return filters
 }
 
-// 메인보드 전용 필터 생성
-function generateMbFilters(components: FirebaseComponentData[]): FilterCategory[] {
-  const filters: FilterCategory[] = []
-
-  // 1. 제조사 필터
-  const manufacturers = [
-    { id: "msi", label: "MSI", count: 0 },
-    { id: "asus", label: "ASUS", count: 0 },
-    { id: "gigabyte", label: "GIGABYTE", count: 0 },
-    { id: "asrock", label: "ASRock", count: 0 },
-    { id: "biostar", label: "BIOSTAR", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("msi")) manufacturers[0].count++
-    if (text.includes("asus")) manufacturers[1].count++
-    if (text.includes("gigabyte")) manufacturers[2].count++
-    if (text.includes("asrock")) manufacturers[3].count++
-    if (text.includes("biostar")) manufacturers[4].count++
-  })
-
-  filters.push({
-    id: "manufacturer",
-    label: "제조사",
-    options: manufacturers.filter((m) => m.count > 0),
-    isOpen: true,
-  })
-
-  // 2. 제품 분류
-  const productTypes = [
-    { id: "인텔-메인보드", label: "인텔 메인보드", count: 0 },
-    { id: "amd-메인보드", label: "AMD 메인보드", count: 0 },
-    { id: "서버-메인보드", label: "서버 메인보드", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("intel") || text.includes("인텔") || text.includes("lga")) productTypes[0].count++
-    if (text.includes("amd") || text.includes("am4") || text.includes("am5")) productTypes[1].count++
-    if (text.includes("서버") || text.includes("server")) productTypes[2].count++
-  })
-
-  filters.push({
-    id: "product-type",
-    label: "제품 분류",
-    options: productTypes.filter((p) => p.count > 0),
-    isOpen: true,
-  })
-
-  // 3. CPU 소켓
-  const cpuSockets = [
-    { id: "인텔-소켓1851", label: "인텔 소켓1851", count: 0 },
-    { id: "인텔-소켓1700", label: "인텔 소켓1700", count: 0 },
-    { id: "인텔-소켓1200", label: "인텔 소켓1200", count: 0 },
-    { id: "amd-소켓am5", label: "AMD 소켓AM5", count: 0 },
-    { id: "amd-소켓am4", label: "AMD 소켓AM4", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("1851") || text.includes("lga1851")) cpuSockets[0].count++
-    if (text.includes("1700") || text.includes("lga1700")) cpuSockets[1].count++
-    if (text.includes("1200") || text.includes("lga1200")) cpuSockets[2].count++
-    if (text.includes("am5")) cpuSockets[3].count++
-    if (text.includes("am4")) cpuSockets[4].count++
-  })
-
-  filters.push({
-    id: "cpu-socket",
-    label: "CPU 소켓",
-    options: cpuSockets.filter((s) => s.count > 0),
-    isOpen: true,
-  })
-
-  // 4. 세부 칩셋
-  const chipsets = [
-    { id: "z890", label: "Z890", count: 0 },
-    { id: "b860", label: "B860", count: 0 },
-    { id: "h810", label: "H810", count: 0 },
-    { id: "z790", label: "Z790", count: 0 },
-    { id: "b760", label: "B760", count: 0 },
-    { id: "h770", label: "H770", count: 0 },
-    { id: "x870e", label: "X870E", count: 0 },
-    { id: "x870", label: "X870", count: 0 },
-    { id: "b850", label: "B850", count: 0 },
-    { id: "x670e", label: "X670E", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("z890")) chipsets[0].count++
-    if (text.includes("b860")) chipsets[1].count++
-    if (text.includes("h810")) chipsets[2].count++
-    if (text.includes("z790")) chipsets[3].count++
-    if (text.includes("b760")) chipsets[4].count++
-    if (text.includes("h770")) chipsets[5].count++
-    if (text.includes("x870e")) chipsets[6].count++
-    if (text.includes("x870") && !text.includes("x870e")) chipsets[7].count++
-    if (text.includes("b850")) chipsets[8].count++
-    if (text.includes("x670e")) chipsets[9].count++
-  })
-
-  filters.push({
-    id: "chipset",
-    label: "세부 칩셋",
-    options: chipsets.filter((c) => c.count > 0),
-    isOpen: true,
-  })
-
-  // 5. 메모리 종류
-  const memoryTypes = [
-    { id: "ddr5", label: "DDR5", count: 0 },
-    { id: "ddr4", label: "DDR4", count: 0 },
-    { id: "ddr5-ddr4", label: "DDR5, DDR4", count: 0 },
-    { id: "ddr3", label: "DDR3", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("ddr5") && text.includes("ddr4")) memoryTypes[2].count++
-    else if (text.includes("ddr5")) memoryTypes[0].count++
-    else if (text.includes("ddr4")) memoryTypes[1].count++
-    else if (text.includes("ddr3")) memoryTypes[3].count++
-  })
-
-  filters.push({
-    id: "memory-type",
-    label: "메모리 종류",
-    options: memoryTypes.filter((m) => m.count > 0),
-    isOpen: true,
-  })
-
-  // 6. VGA 연결
-  const vgaConnections = [
-    { id: "pcie50x16", label: "PCIe5.0 x16", count: 0 },
-    { id: "pcie40x16", label: "PCIe4.0 x16", count: 0 },
-    { id: "pcie30x16", label: "PCIe3.0 x16", count: 0 },
-    { id: "pcie20x16", label: "PCIe2.0 x16", count: 0 },
-    { id: "agp", label: "AGP", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("pcie5.0") || text.includes("pcie 5.0")) vgaConnections[0].count++
-    if (text.includes("pcie4.0") || text.includes("pcie 4.0")) vgaConnections[1].count++
-    if (text.includes("pcie3.0") || text.includes("pcie 3.0")) vgaConnections[2].count++
-    if (text.includes("pcie2.0") || text.includes("pcie 2.0")) vgaConnections[3].count++
-    if (text.includes("agp")) vgaConnections[4].count++
-  })
-
-  filters.push({
-    id: "vga-connection",
-    label: "VGA 연결",
-    options: vgaConnections.filter((v) => v.count > 0),
-    isOpen: true,
-  })
-
-  // 7. 폼팩터
-  const formFactors = [
-    { id: "atx", label: "ATX", count: 0 },
-    { id: "m-atx", label: "M-ATX", count: 0 },
-    { id: "mini-itx", label: "Mini-ITX", count: 0 },
-    { id: "e-atx", label: "E-ATX", count: 0 },
-    { id: "xl-atx", label: "XL-ATX", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("atx") && !text.includes("m-atx") && !text.includes("mini") && !text.includes("e-atx"))
-      formFactors[0].count++
-    if (text.includes("m-atx") || text.includes("matx")) formFactors[1].count++
-    if (text.includes("mini-itx") || text.includes("mini itx")) formFactors[2].count++
-    if (text.includes("e-atx") || text.includes("eatx")) formFactors[3].count++
-    if (text.includes("xl-atx") || text.includes("xlatx")) formFactors[4].count++
-  })
-
-  filters.push({
-    id: "form-factor",
-    label: "폼팩터",
-    options: formFactors.filter((f) => f.count > 0),
-    isOpen: true,
-  })
-
-  return filters
-}
-
-// 쿨러 전용 필터 생성
+// 쿨러 전용 필터 생성 - 상세 버전 (스크린샷 기반)
 function generateCoolerFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
 
   // 1. 제조사 필터
   const manufacturers = [
-    { id: "써모랩", label: "써모랩", count: 0 },
-    { id: "잘만", label: "잘만", count: 0 },
+    { id: "pccooler", label: "PCCOOLER", count: 0 },
+    { id: "deepcool", label: "DEEPCOOL", count: 0 },
     { id: "쿨러마스터", label: "쿨러마스터", count: 0 },
-    { id: "녹투아", label: "녹투아", count: 0 },
-    { id: "딥쿨", label: "딥쿨", count: 0 },
+    { id: "잘만", label: "잘만", count: 0 },
+    { id: "darkflash", label: "darkFlash", count: 0 },
+  ]
+
+  // 2. 제품 종류
+  const productTypes = [
+    { id: "cpu-cooler", label: "CPU 쿨러", count: 0 },
+    { id: "system-compound-cooler", label: "시스템컴파운드(그리스)", count: 0 },
+    { id: "system-cooler", label: "시스템 쿨러", count: 0 },
+    { id: "m2-ssd-cooler", label: "M.2 SSD 쿨러", count: 0 },
+    { id: "vga-support", label: "VGA 지지대", count: 0 },
+  ]
+
+  // 3. 냉각 방식
+  const coolingTypes = [
+    { id: "air-cooling", label: "공랭", count: 0 },
+    { id: "water-cooling", label: "수랭", count: 0 },
+  ]
+
+  // 4. A/S기간
+  const warrantyPeriods = [
+    { id: "6years-above", label: "6년+무상보상", count: 0 },
+    { id: "5years-above", label: "5년+무상보상", count: 0 },
+    { id: "3years-above", label: "3년+무상보상", count: 0 },
+    { id: "1year-above-5years", label: "1년1년+무상보상5년", count: 0 },
+    { id: "2years-above-5years", label: "2년1년+무상보상5년", count: 0 },
+  ]
+
+  // 5. 인텔 소켓
+  const intelSockets = [
+    { id: "lga1851", label: "LGA1851", count: 0 },
+    { id: "lga1700", label: "LGA1700", count: 0 },
+    { id: "lga1200", label: "LGA1200", count: 0 },
+    { id: "lga115x", label: "LGA115x", count: 0 },
+    { id: "lga2011-v3", label: "LGA2011-V3", count: 0 },
+  ]
+
+  // 6. AMD 소켓
+  const amdSockets = [
+    { id: "am5", label: "AM5", count: 0 },
+    { id: "am4", label: "AM4", count: 0 },
+    { id: "swrx8", label: "sWRX8", count: 0 },
+    { id: "strx4", label: "sTRX4", count: 0 },
+    { id: "tr4", label: "TR4", count: 0 },
+  ]
+
+  // 7. 높이
+  const heights = [
+    { id: "200mm-above", label: "200~ mm", count: 0 },
+    { id: "165mm-above", label: "165~ mm", count: 0 },
+    { id: "150-164mm", label: "150~164 mm", count: 0 },
+    { id: "125-149mm", label: "125~149 mm", count: 0 },
+    { id: "100-124mm", label: "100~124 mm", count: 0 },
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    if (text.includes("써모랩") || text.includes("thermolab")) manufacturers[0].count++
-    if (text.includes("잘만") || text.includes("zalman")) manufacturers[1].count++
+    // 제조사 카운팅
+    if (text.includes("pccooler")) manufacturers[0].count++
+    if (text.includes("deepcool") || text.includes("딥쿨")) manufacturers[1].count++
     if (text.includes("쿨러마스터") || text.includes("cooler master")) manufacturers[2].count++
-    if (text.includes("녹투아") || text.includes("noctua")) manufacturers[3].count++
-    if (text.includes("딥쿨") || text.includes("deepcool")) manufacturers[4].count++
+    if (text.includes("잘만") || text.includes("zalman")) manufacturers[3].count++
+    if (text.includes("darkflash")) manufacturers[4].count++
+
+    // 제품 종류 카운팅
+    if (text.includes("cpu 쿨러") || text.includes("cpu쿨러")) productTypes[0].count++
+    if (text.includes("그리스") || text.includes("컴파운드")) productTypes[1].count++
+    if (text.includes("시스템 쿨러")) productTypes[2].count++
+    if (text.includes("m.2") && text.includes("쿨러")) productTypes[3].count++
+    if (text.includes("vga") && text.includes("지지대")) productTypes[4].count++
+
+    // 냉각 방식 카운팅
+    if (text.includes("공랭") || text.includes("air")) coolingTypes[0].count++
+    if (text.includes("수랭") || text.includes("water")) coolingTypes[1].count++
+
+    // A/S기간 카운팅
+    if (text.includes("6년")) warrantyPeriods[0].count++
+    if (text.includes("5년")) warrantyPeriods[1].count++
+    if (text.includes("3년")) warrantyPeriods[2].count++
+    if (text.includes("1년") && text.includes("5년")) warrantyPeriods[3].count++
+    if (text.includes("2년") && text.includes("5년")) warrantyPeriods[4].count++
+
+    // 인텔 소켓 카운팅
+    if (text.includes("lga1851") || text.includes("1851")) intelSockets[0].count++
+    if (text.includes("lga1700") || text.includes("1700")) intelSockets[1].count++
+    if (text.includes("lga1200") || text.includes("1200")) intelSockets[2].count++
+    if (text.includes("lga115") || text.includes("115x")) intelSockets[3].count++
+    if (text.includes("lga2011") || text.includes("2011")) intelSockets[4].count++
+
+    // AMD 소켓 카운팅
+    if (text.includes("am5")) amdSockets[0].count++
+    if (text.includes("am4")) amdSockets[1].count++
+    if (text.includes("swrx8")) amdSockets[2].count++
+    if (text.includes("strx4")) amdSockets[3].count++
+    if (text.includes("tr4")) amdSockets[4].count++
+
+    // 높이 카운팅
+    const heightMatch = text.match(/(\d+)mm/)
+    if (heightMatch) {
+      const height = Number.parseInt(heightMatch[1])
+      if (height >= 200) heights[0].count++
+      else if (height >= 165) heights[1].count++
+      else if (height >= 150) heights[2].count++
+      else if (height >= 125) heights[3].count++
+      else if (height >= 100) heights[4].count++
+    }
   })
 
+  // 필터 추가
   filters.push({
     id: "manufacturer",
     label: "제조사",
     options: manufacturers.filter((m) => m.count > 0),
     isOpen: true,
-  })
-
-  // 2. 제품 종류
-  const productTypes = [
-    { id: "cpu-쿨러", label: "CPU 쿨러", count: 0 },
-    { id: "케이스-쿨러", label: "케이스 쿨러", count: 0 },
-    { id: "vga-쿨러", label: "VGA 쿨러", count: 0 },
-    { id: "메모리-쿨러", label: "메모리 쿨러", count: 0 },
-    { id: "hdd-쿨러", label: "HDD 쿨러", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("cpu") && text.includes("쿨러")) productTypes[0].count++
-    if (text.includes("케이스") && text.includes("쿨러")) productTypes[1].count++
-    if (text.includes("vga") && text.includes("쿨러")) productTypes[2].count++
-    if (text.includes("메모리") && text.includes("쿨러")) productTypes[3].count++
-    if (text.includes("hdd") && text.includes("쿨러")) productTypes[4].count++
   })
 
   filters.push({
@@ -1393,47 +1572,11 @@ function generateCoolerFilters(components: FirebaseComponentData[]): FilterCateg
     isOpen: true,
   })
 
-  // 3. 냉각 방식
-  const coolingTypes = [
-    { id: "공랭", label: "공랭", count: 0 },
-    { id: "수랭", label: "수랭", count: 0 },
-    { id: "하이브리드", label: "하이브리드", count: 0 },
-    { id: "팬리스", label: "팬리스", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("공랭") || text.includes("air cooling")) coolingTypes[0].count++
-    if (text.includes("수랭") || text.includes("water cooling") || text.includes("aio")) coolingTypes[1].count++
-    if (text.includes("하이브리드") || text.includes("hybrid")) coolingTypes[2].count++
-    if (text.includes("팬리스") || text.includes("fanless")) coolingTypes[3].count++
-  })
-
   filters.push({
     id: "cooling-type",
     label: "냉각 방식",
     options: coolingTypes.filter((c) => c.count > 0),
     isOpen: true,
-  })
-
-  // 4. A/S기간
-  const warrantyPeriods = [
-    { id: "5년", label: "5년", count: 0 },
-    { id: "3년", label: "3년", count: 0 },
-    { id: "2년", label: "2년", count: 0 },
-    { id: "1년", label: "1년", count: 0 },
-    { id: "6개월", label: "6개월", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("5년") || text.includes("5 year")) warrantyPeriods[0].count++
-    if (text.includes("3년") || text.includes("3 year")) warrantyPeriods[1].count++
-    if (text.includes("2년") || text.includes("2 year")) warrantyPeriods[2].count++
-    if (text.includes("1년") || text.includes("1 year")) warrantyPeriods[3].count++
-    if (text.includes("6개월") || text.includes("6 month")) warrantyPeriods[4].count++
   })
 
   filters.push({
@@ -1443,80 +1586,18 @@ function generateCoolerFilters(components: FirebaseComponentData[]): FilterCateg
     isOpen: true,
   })
 
-  // 5. 인텔 소켓
-  const intelSockets = [
-    { id: "소켓1851", label: "소켓1851", count: 0 },
-    { id: "소켓1700", label: "소켓1700", count: 0 },
-    { id: "소켓1200", label: "소켓1200", count: 0 },
-    { id: "소켓1151", label: "소켓1151", count: 0 },
-    { id: "소켓1150", label: "소켓1150", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("1851") || text.includes("lga1851")) intelSockets[0].count++
-    if (text.includes("1700") || text.includes("lga1700")) intelSockets[1].count++
-    if (text.includes("1200") || text.includes("lga1200")) intelSockets[2].count++
-    if (text.includes("1151") || text.includes("lga1151")) intelSockets[3].count++
-    if (text.includes("1150") || text.includes("lga1150")) intelSockets[4].count++
-  })
-
   filters.push({
     id: "intel-socket",
     label: "인텔 소켓",
-    options: intelSockets.filter((s) => s.count > 0),
+    options: intelSockets.filter((i) => i.count > 0),
     isOpen: true,
-  })
-
-  // 6. AMD 소켓
-  const amdSockets = [
-    { id: "소켓am5", label: "소켓AM5", count: 0 },
-    { id: "소켓am4", label: "소켓AM4", count: 0 },
-    { id: "소켓am3", label: "소켓AM3", count: 0 },
-    { id: "소켓fm2", label: "소켓FM2", count: 0 },
-    { id: "소켓tr4", label: "소켓TR4", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("am5")) amdSockets[0].count++
-    if (text.includes("am4")) amdSockets[1].count++
-    if (text.includes("am3")) amdSockets[2].count++
-    if (text.includes("fm2")) amdSockets[3].count++
-    if (text.includes("tr4")) amdSockets[4].count++
   })
 
   filters.push({
     id: "amd-socket",
     label: "AMD 소켓",
-    options: amdSockets.filter((s) => s.count > 0),
+    options: amdSockets.filter((a) => a.count > 0),
     isOpen: true,
-  })
-
-  // 7. 높이
-  const heights = [
-    { id: "200mm-이상", label: "200mm 이상", count: 0 },
-    { id: "180199mm", label: "180~199mm", count: 0 },
-    { id: "160179mm", label: "160~179mm", count: 0 },
-    { id: "140159mm", label: "140~159mm", count: 0 },
-    { id: "120139mm", label: "120~139mm", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    // 높이 정보 추출
-    const heightMatch = text.match(/(\d+)mm/)
-    if (heightMatch) {
-      const height = Number.parseInt(heightMatch[1])
-      if (height >= 200) heights[0].count++
-      else if (height >= 180) heights[1].count++
-      else if (height >= 160) heights[2].count++
-      else if (height >= 140) heights[3].count++
-      else if (height >= 120) heights[4].count++
-    }
   })
 
   filters.push({
@@ -1529,53 +1610,128 @@ function generateCoolerFilters(components: FirebaseComponentData[]): FilterCateg
   return filters
 }
 
-// 파워 전용 필터 생성
-function generatePowerFilters(components: FirebaseComponentData[]): FilterCategory[] {
+// 메인보드 전용 필터 생성 - 상세 버전 (스크린샷 기반)
+function generateMbFilters(components: FirebaseComponentData[]): FilterCategory[] {
   const filters: FilterCategory[] = []
 
   // 1. 제조사 필터
   const manufacturers = [
-    { id: "마이크로닉스", label: "마이크로닉스", count: 0 },
-    { id: "시소닉", label: "시소닉", count: 0 },
-    { id: "쿨러마스터", label: "쿨러마스터", count: 0 },
-    { id: "corsair", label: "Corsair", count: 0 },
-    { id: "antec", label: "Antec", count: 0 },
+    { id: "msi", label: "MSI", count: 0 },
+    { id: "asus", label: "ASUS", count: 0 },
+    { id: "gigabyte", label: "GIGABYTE", count: 0 },
+    { id: "asrock", label: "ASRock", count: 0 },
+    { id: "biostar", label: "BIOSTAR", count: 0 },
+  ]
+
+  // 2. 제품 분류
+  const productTypes = [
+    { id: "intel-cpu", label: "인텔 CPU용", count: 0 },
+    { id: "amd-cpu", label: "AMD CPU용", count: 0 },
+    { id: "embedded", label: "임베디드", count: 0 },
+  ]
+
+  // 3. CPU 소켓
+  const cpuSockets = [
+    { id: "intel-socket1851", label: "인텔(소켓1851)", count: 0 },
+    { id: "intel-socket1700", label: "인텔(소켓1700)", count: 0 },
+    { id: "intel-socket1200", label: "인텔(소켓1200)", count: 0 },
+    { id: "amd-socket-am5", label: "AMD(소켓AM5)", count: 0 },
+    { id: "amd-socket-am4", label: "AMD(소켓AM4)", count: 0 },
+  ]
+
+  // 4. 세부 칩셋
+  const chipsets = [
+    { id: "intel-z890", label: "인텔 Z890", count: 0 },
+    { id: "intel-b860", label: "인텔 B860", count: 0 },
+    { id: "intel-b760", label: "인텔 B760", count: 0 },
+    { id: "amd-b850", label: "AMD B850", count: 0 },
+    { id: "amd-b650", label: "AMD B650", count: 0 },
+  ]
+
+  // 5. 메모리 종류
+  const memoryTypes = [
+    { id: "ddr5", label: "DDR5", count: 0 },
+    { id: "lpddr5", label: "LPDDR5", count: 0 },
+    { id: "ddr4", label: "DDR4", count: 0 },
+    { id: "lpddr4", label: "LPDDR4", count: 0 },
+    { id: "ddr3", label: "DDR3", count: 0 },
+  ]
+
+  // 6. VGA 연결
+  const vgaConnections = [
+    { id: "pcie5.0-x16", label: "PCIe5.0 ×16", count: 0 },
+    { id: "pcie4.0-x16", label: "PCIe4.0 ×16", count: 0 },
+    { id: "pcie3.0-x16", label: "PCIe3.0 ×16", count: 0 },
+    { id: "pcie-x16", label: "PCIe ×16", count: 0 },
+    { id: "pcie-hybrid", label: "PCIe 혼합", count: 0 },
+  ]
+
+  // 7. 폼팩터
+  const formFactors = [
+    { id: "atx-30.5x24.4", label: "ATX (30.5×24.4cm)", count: 0 },
+    { id: "m-atx-24.4x24.4", label: "M-ATX (24.4×24.4cm)", count: 0 },
+    { id: "m-itx-17.0x17.0", label: "M-iTX (17.0×17.0cm)", count: 0 },
+    { id: "e-atx-30.5x33.0", label: "E-ATX (30.5×33.0cm)", count: 0 },
+    { id: "atx-mini-factor", label: "ATX (슈퍼미니팩터)", count: 0 },
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    if (text.includes("마이크로닉스") || text.includes("micronics")) manufacturers[0].count++
-    if (text.includes("시소닉") || text.includes("seasonic")) manufacturers[1].count++
-    if (text.includes("쿨러마스터") || text.includes("cooler master")) manufacturers[2].count++
-    if (text.includes("corsair")) manufacturers[3].count++
-    if (text.includes("antec")) manufacturers[4].count++
+    // 제조사 카운팅
+    if (text.includes("msi")) manufacturers[0].count++
+    if (text.includes("asus")) manufacturers[1].count++
+    if (text.includes("gigabyte")) manufacturers[2].count++
+    if (text.includes("asrock")) manufacturers[3].count++
+    if (text.includes("biostar")) manufacturers[4].count++
+
+    // 제품 분류 카운팅
+    if (text.includes("인텔") || text.includes("intel") || text.includes("lga")) productTypes[0].count++
+    if (text.includes("amd") || text.includes("am4") || text.includes("am5")) productTypes[1].count++
+    if (text.includes("임베디드") || text.includes("embedded")) productTypes[2].count++
+
+    // CPU 소켓 카운팅
+    if (text.includes("1851") || text.includes("lga1851")) cpuSockets[0].count++
+    if (text.includes("1700") || text.includes("lga1700")) cpuSockets[1].count++
+    if (text.includes("1200") || text.includes("lga1200")) cpuSockets[2].count++
+    if (text.includes("am5")) cpuSockets[3].count++
+    if (text.includes("am4")) cpuSockets[4].count++
+
+    // 세부 칩셋 카운팅
+    if (text.includes("z890")) chipsets[0].count++
+    if (text.includes("b860")) chipsets[1].count++
+    if (text.includes("b760")) chipsets[2].count++
+    if (text.includes("b850")) chipsets[3].count++
+    if (text.includes("b650")) chipsets[4].count++
+
+    // 메모리 종류 카운팅
+    if (text.includes("ddr5") && !text.includes("lpddr5")) memoryTypes[0].count++
+    if (text.includes("lpddr5")) memoryTypes[1].count++
+    if (text.includes("ddr4") && !text.includes("lpddr4")) memoryTypes[2].count++
+    if (text.includes("lpddr4")) memoryTypes[3].count++
+    if (text.includes("ddr3")) memoryTypes[4].count++
+
+    // VGA 연결 카운팅
+    if (text.includes("pcie 5.0") && text.includes("x16")) vgaConnections[0].count++
+    if (text.includes("pcie 4.0") && text.includes("x16")) vgaConnections[1].count++
+    if (text.includes("pcie 3.0") && text.includes("x16")) vgaConnections[2].count++
+    if (text.includes("pcie") && text.includes("x16")) vgaConnections[3].count++
+    if (text.includes("pcie") && text.includes("혼합")) vgaConnections[4].count++
+
+    // 폼팩터 카운팅
+    if (text.includes("atx") && !text.includes("m-atx") && !text.includes("e-atx")) formFactors[0].count++
+    if (text.includes("m-atx") || text.includes("matx")) formFactors[1].count++
+    if (text.includes("m-itx") || text.includes("mini-itx")) formFactors[2].count++
+    if (text.includes("e-atx") || text.includes("eatx")) formFactors[3].count++
+    if (text.includes("슈퍼미니") || text.includes("mini factor")) formFactors[4].count++
   })
 
+  // 필터 추가
   filters.push({
     id: "manufacturer",
     label: "제조사",
     options: manufacturers.filter((m) => m.count > 0),
     isOpen: true,
-  })
-
-  // 2. 제품 분류
-  const productTypes = [
-    { id: "atx", label: "ATX", count: 0 },
-    { id: "sfx", label: "SFX", count: 0 },
-    { id: "tfx", label: "TFX", count: 0 },
-    { id: "flex-atx", label: "Flex ATX", count: 0 },
-    { id: "1u", label: "1U", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("atx") && !text.includes("flex")) productTypes[0].count++
-    if (text.includes("sfx")) productTypes[1].count++
-    if (text.includes("tfx")) productTypes[2].count++
-    if (text.includes("flex atx") || text.includes("flex-atx")) productTypes[3].count++
-    if (text.includes("1u")) productTypes[4].count++
   })
 
   filters.push({
@@ -1585,62 +1741,184 @@ function generatePowerFilters(components: FirebaseComponentData[]): FilterCatego
     isOpen: true,
   })
 
-  // 3. 정격출력
-  const powerOutputs = [
-    { id: "1500w-이상", label: "1500W 이상", count: 0 },
-    { id: "1200w1499w", label: "1200W~1499W", count: 0 },
-    { id: "1000w1199w", label: "1000W~1199W", count: 0 },
-    { id: "850w999w", label: "850W~999W", count: 0 },
-    { id: "750w849w", label: "750W~849W", count: 0 },
-    { id: "650w749w", label: "650W~749W", count: 0 },
-    { id: "550w649w", label: "550W~649W", count: 0 },
-    { id: "450w549w", label: "450W~549W", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    // 정격출력 추출
-    const powerMatch = text.match(/(\d+)w/)
-    if (powerMatch) {
-      const power = Number.parseInt(powerMatch[1])
-      if (power >= 1500) powerOutputs[0].count++
-      else if (power >= 1200) powerOutputs[1].count++
-      else if (power >= 1000) powerOutputs[2].count++
-      else if (power >= 850) powerOutputs[3].count++
-      else if (power >= 750) powerOutputs[4].count++
-      else if (power >= 650) powerOutputs[5].count++
-      else if (power >= 550) powerOutputs[6].count++
-      else if (power >= 450) powerOutputs[7].count++
-    }
-  })
-
   filters.push({
-    id: "power-output",
-    label: "정격출력",
-    options: powerOutputs.filter((p) => p.count > 0),
+    id: "cpu-socket",
+    label: "CPU 소켓",
+    options: cpuSockets.filter((c) => c.count > 0),
     isOpen: true,
   })
 
+  filters.push({
+    id: "chipset",
+    label: "세부 칩셋",
+    options: chipsets.filter((c) => c.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "memory-type",
+    label: "메모리 종류",
+    options: memoryTypes.filter((m) => m.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "vga-connection",
+    label: "VGA 연결",
+    options: vgaConnections.filter((v) => v.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "form-factor",
+    label: "폼팩터",
+    options: formFactors.filter((f) => f.count > 0),
+    isOpen: true,
+  })
+
+  return filters
+}
+
+// 파워 전용 필터 생성 - 상세 버전 (스크린샷 기반)
+function generatePowerFilters(components: FirebaseComponentData[]): FilterCategory[] {
+  const filters: FilterCategory[] = []
+
+  // 1. 제조사 필터
+  const manufacturers = [
+    { id: "시소닉", label: "시소닉", count: 0 },
+    { id: "잘만", label: "잘만", count: 0 },
+    { id: "마이크로닉스", label: "마이크로닉스", count: 0 },
+    { id: "쿨러마스터", label: "쿨러마스터", count: 0 },
+    { id: "darkflash", label: "darkFlash", count: 0 },
+  ]
+
+  // 2. 제품 분류
+  const productTypes = [
+    { id: "atx-power", label: "ATX 파워", count: 0 },
+    { id: "m-atx-sfx-power", label: "M-ATX(SFX) 파워", count: 0 },
+    { id: "tfx-power", label: "TFX 파워", count: 0 },
+    { id: "server-power", label: "서버용 파워", count: 0 },
+    { id: "flex-atx-power", label: "Flex-ATX 파워", count: 0 },
+  ]
+
+  // 3. 정격출력
+  const powerRatings = [
+    { id: "2000w-above", label: "2000W 이상", count: 0 },
+    { id: "1600w-1999w", label: "1600W~1999W", count: 0 },
+    { id: "1300w-1599w", label: "1300W~1599W", count: 0 },
+    { id: "1000w-1299w", label: "1000W~1299W", count: 0 },
+    { id: "900w-999w", label: "900W~999W", count: 0 },
+  ]
+
   // 4. 80PLUS인증
   const plus80Certifications = [
-    { id: "80plus-titanium", label: "80PLUS Titanium", count: 0 },
-    { id: "80plus-platinum", label: "80PLUS Platinum", count: 0 },
-    { id: "80plus-gold", label: "80PLUS Gold", count: 0 },
-    { id: "80plus-silver", label: "80PLUS Silver", count: 0 },
-    { id: "80plus-bronze", label: "80PLUS Bronze", count: 0 },
-    { id: "80plus-white", label: "80PLUS White", count: 0 },
+    { id: "80plus-titanium", label: "80 PLUS 티타늄", count: 0 },
+    { id: "80plus-platinum", label: "80 PLUS 플래티넘", count: 0 },
+    { id: "80plus-gold", label: "80 PLUS 골드", count: 0 },
+    { id: "80plus-silver", label: "80 PLUS 실버", count: 0 },
+    { id: "80plus-bronze", label: "80 PLUS 브론즈", count: 0 },
+  ]
+
+  // 5. 케이블연결
+  const cableConnections = [
+    { id: "full-modular", label: "풀모듈러", count: 0 },
+    { id: "semi-modular", label: "세미모듈러", count: 0 },
+    { id: "cable-integrated", label: "케이블일체형", count: 0 },
+  ]
+
+  // 6. ETA인증
+  const etaCertifications = [
+    { id: "titanium", label: "TITANIUM", count: 0 },
+    { id: "platinum", label: "PLATINUM", count: 0 },
+    { id: "gold", label: "GOLD", count: 0 },
+    { id: "silver", label: "SILVER", count: 0 },
+    { id: "bronze", label: "BRONZE", count: 0 },
+  ]
+
+  // 7. LAMBDA인증
+  const lambdaCertifications = [
+    { id: "a-plus-plus", label: "A++", count: 0 },
+    { id: "a-plus", label: "A+", count: 0 },
+    { id: "a", label: "A", count: 0 },
+    { id: "a-minus", label: "A-", count: 0 },
+    { id: "standard-plus-plus", label: "STANDARD++", count: 0 },
   ]
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
-    if (text.includes("titanium") || text.includes("티타늄")) plus80Certifications[0].count++
-    if (text.includes("platinum") || text.includes("플래티넘")) plus80Certifications[1].count++
-    if (text.includes("gold") || text.includes("골드")) plus80Certifications[2].count++
-    if (text.includes("silver") || text.includes("실버")) plus80Certifications[3].count++
-    if (text.includes("bronze") || text.includes("브론즈")) plus80Certifications[4].count++
-    if (text.includes("white") || text.includes("화이트")) plus80Certifications[5].count++
+    // 제조사 카운팅
+    if (text.includes("시소닉") || text.includes("seasonic")) manufacturers[0].count++
+    if (text.includes("잘만") || text.includes("zalman")) manufacturers[1].count++
+    if (text.includes("마이크로닉스") || text.includes("micronics")) manufacturers[2].count++
+    if (text.includes("쿨러마스터") || text.includes("cooler master")) manufacturers[3].count++
+    if (text.includes("darkflash")) manufacturers[4].count++
+
+    // 제품 분류 카운팅
+    if (text.includes("atx") && !text.includes("m-atx") && !text.includes("flex")) productTypes[0].count++
+    if (text.includes("m-atx") || text.includes("sfx")) productTypes[1].count++
+    if (text.includes("tfx")) productTypes[2].count++
+    if (text.includes("서버") || text.includes("server")) productTypes[3].count++
+    if (text.includes("flex-atx") || text.includes("flex atx")) productTypes[4].count++
+
+    // 정격출력 카운팅
+    const wattMatch = text.match(/(\d+)w/)
+    if (wattMatch) {
+      const watts = Number.parseInt(wattMatch[1])
+      if (watts >= 2000) powerRatings[0].count++
+      else if (watts >= 1600) powerRatings[1].count++
+      else if (watts >= 1300) powerRatings[2].count++
+      else if (watts >= 1000) powerRatings[3].count++
+      else if (watts >= 900) powerRatings[4].count++
+    }
+
+    // 80PLUS인증 카운팅
+    if (text.includes("80 plus titanium") || text.includes("티타늄")) plus80Certifications[0].count++
+    if (text.includes("80 plus platinum") || text.includes("플래티넘")) plus80Certifications[1].count++
+    if (text.includes("80 plus gold") || text.includes("골드")) plus80Certifications[2].count++
+    if (text.includes("80 plus silver") || text.includes("실버")) plus80Certifications[3].count++
+    if (text.includes("80 plus bronze") || text.includes("브론즈")) plus80Certifications[4].count++
+
+    // 케이블연결 카운팅
+    if (text.includes("풀모듈러") || text.includes("full modular")) cableConnections[0].count++
+    if (text.includes("세미모듈러") || text.includes("semi modular")) cableConnections[1].count++
+    if (text.includes("케이블일체형") || text.includes("cable integrated")) cableConnections[2].count++
+
+    // ETA인증 카운팅
+    if (text.includes("eta") && text.includes("titanium")) etaCertifications[0].count++
+    if (text.includes("eta") && text.includes("platinum")) etaCertifications[1].count++
+    if (text.includes("eta") && text.includes("gold")) etaCertifications[2].count++
+    if (text.includes("eta") && text.includes("silver")) etaCertifications[3].count++
+    if (text.includes("eta") && text.includes("bronze")) etaCertifications[4].count++
+
+    // LAMBDA인증 카운팅
+    if (text.includes("lambda") && text.includes("a++")) lambdaCertifications[0].count++
+    if (text.includes("lambda") && text.includes("a+")) lambdaCertifications[1].count++
+    if (text.includes("lambda") && text.includes("a") && !text.includes("a+")) lambdaCertifications[2].count++
+    if (text.includes("lambda") && text.includes("a-")) lambdaCertifications[3].count++
+    if (text.includes("lambda") && text.includes("standard++")) lambdaCertifications[4].count++
+  })
+
+  // 필터 추가
+  filters.push({
+    id: "manufacturer",
+    label: "제조사",
+    options: manufacturers.filter((m) => m.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "product-type",
+    label: "제품 분류",
+    options: productTypes.filter((p) => p.count > 0),
+    isOpen: true,
+  })
+
+  filters.push({
+    id: "power-rating",
+    label: "정격출력",
+    options: powerRatings.filter((p) => p.count > 0),
+    isOpen: true,
   })
 
   filters.push({
@@ -1650,43 +1928,11 @@ function generatePowerFilters(components: FirebaseComponentData[]): FilterCatego
     isOpen: true,
   })
 
-  // 5. 케이블연결
-  const cableTypes = [
-    { id: "풀모듈러", label: "풀모듈러", count: 0 },
-    { id: "세미모듈러", label: "세미모듈러", count: 0 },
-    { id: "논모듈러", label: "논모듈러", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("풀모듈러") || text.includes("full modular")) cableTypes[0].count++
-    if (text.includes("세미모듈러") || text.includes("semi modular")) cableTypes[1].count++
-    if (text.includes("논모듈러") || text.includes("non modular")) cableTypes[2].count++
-  })
-
   filters.push({
-    id: "cable-type",
+    id: "cable-connection",
     label: "케이블연결",
-    options: cableTypes.filter((c) => c.count > 0),
+    options: cableConnections.filter((c) => c.count > 0),
     isOpen: true,
-  })
-
-  // 6. ETA인증
-  const etaCertifications = [
-    { id: "eta-a", label: "ETA-A", count: 0 },
-    { id: "eta-b", label: "ETA-B", count: 0 },
-    { id: "eta-c", label: "ETA-C", count: 0 },
-    { id: "eta-미인증", label: "ETA 미인증", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("eta-a") || text.includes("eta a")) etaCertifications[0].count++
-    if (text.includes("eta-b") || text.includes("eta b")) etaCertifications[1].count++
-    if (text.includes("eta-c") || text.includes("eta c")) etaCertifications[2].count++
-    if (text.includes("eta 미인증") || text.includes("eta 없음")) etaCertifications[3].count++
   })
 
   filters.push({
@@ -1694,23 +1940,6 @@ function generatePowerFilters(components: FirebaseComponentData[]): FilterCatego
     label: "ETA인증",
     options: etaCertifications.filter((e) => e.count > 0),
     isOpen: true,
-  })
-
-  // 7. LAMBDA인증
-  const lambdaCertifications = [
-    { id: "lambda-a", label: "LAMBDA-A", count: 0 },
-    { id: "lambda-b", label: "LAMBDA-B", count: 0 },
-    { id: "lambda-c", label: "LAMBDA-C", count: 0 },
-    { id: "lambda-미인증", label: "LAMBDA 미인증", count: 0 },
-  ]
-
-  components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
-
-    if (text.includes("lambda-a") || text.includes("lambda a")) lambdaCertifications[0].count++
-    if (text.includes("lambda-b") || text.includes("lambda b")) lambdaCertifications[1].count++
-    if (text.includes("lambda-c") || text.includes("lambda c")) lambdaCertifications[2].count++
-    if (text.includes("lambda 미인증") || text.includes("lambda 없음")) lambdaCertifications[3].count++
   })
 
   filters.push({
@@ -1728,7 +1957,7 @@ function generateManufacturerFilter(components: FirebaseComponentData[]): Filter
   const manufacturerCounts: Record<string, number> = {}
 
   components.forEach((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
     // 주요 제조사들 추출
     const manufacturers = [
@@ -1817,16 +2046,31 @@ function generatePriceRangeFilter(components: FirebaseComponentData[]): FilterCa
   }
 }
 
-// 필터 적용 함수
+// 필터 적용 함수 - 필터 생성과 동일한 로직 사용
 export function applyFilters(
   components: FirebaseComponentData[],
   filters: FilterState,
   category: string,
 ): FirebaseComponentData[] {
-  if (!components || components.length === 0) return []
+  console.log("=== APPLY FILTERS DEBUG ===")
+  console.log("Input components:", components.length)
+  console.log("Filters:", filters)
+  console.log("Category:", category)
 
-  return components.filter((component) => {
-    const text = `${component.name} ${component.description || ""} ${component.specs || ""}`.toLowerCase()
+  if (!components || components.length === 0) {
+    console.log("No components to filter")
+    return []
+  }
+
+  // 필터가 비어있으면 모든 컴포넌트 반환
+  const hasActiveFilters = Object.values(filters).some((options) => options.length > 0)
+  if (!hasActiveFilters) {
+    console.log("No active filters, returning all components")
+    return components
+  }
+
+  const result = components.filter((component) => {
+    const text = normalizeText(`${component.name} ${component.description || ""} ${component.specs || ""}`)
 
     // 각 필터 카테고리별로 체크
     for (const [filterId, selectedOptions] of Object.entries(filters)) {
@@ -1838,54 +2082,138 @@ export function applyFilters(
         case "manufacturer":
           matchesFilter = selectedOptions.some((option) => {
             if (option === "인텔") {
-              return (
-                text.includes("intel") ||
-                text.includes("인텔") ||
-                text.includes("core") ||
-                text.includes("코어") ||
-                text.includes("i3") ||
-                text.includes("i5") ||
-                text.includes("i7") ||
-                text.includes("i9")
-              )
-            }
-            if (option === "amd") {
-              return (
+              // AMD 제품 먼저 체크
+              const isAmd =
                 text.includes("amd") ||
                 text.includes("ryzen") ||
                 text.includes("라이젠") ||
                 text.includes("epyc") ||
-                text.includes("threadripper")
-              )
-            }
-            return text.includes(option.toLowerCase())
-          })
-          break
+                text.includes("threadripper") ||
+                text.includes("스레드리퍼") ||
+                text.includes("athlon") ||
+                text.includes("애슬론")
 
-        case "chipset-manufacturer":
-          matchesFilter = selectedOptions.some((option) => {
-            if (option === "nvidia") {
-              return text.includes("nvidia") || text.includes("rtx") || text.includes("gtx")
+              // AMD가 아닌 경우에만 Intel 체크
+              const isIntel =
+                !isAmd &&
+                (text.includes("intel") ||
+                  text.includes("인텔") ||
+                  (text.includes("core") && !text.includes("라이젠")) ||
+                  (text.includes("코어") && !text.includes("라이젠")) ||
+                  text.includes("i3") ||
+                  text.includes("i5") ||
+                  text.includes("i7") ||
+                  text.includes("i9") ||
+                  text.includes("xeon") ||
+                  text.includes("제온") ||
+                  text.includes("ultra") ||
+                  text.includes("울트라"))
+
+              return isIntel
             }
-            if (option === "amdati") {
-              return text.includes("amd") || text.includes("radeon") || text.includes("rx")
-            }
-            if (option === "intel") {
-              return text.includes("intel") || text.includes("arc")
+            if (option === "amd") {
+              const isAmd =
+                text.includes("amd") ||
+                text.includes("ryzen") ||
+                text.includes("라이젠") ||
+                text.includes("epyc") ||
+                text.includes("threadripper") ||
+                text.includes("스레드리퍼") ||
+                text.includes("athlon") ||
+                text.includes("애슬론")
+              return isAmd
             }
             return text.includes(option.toLowerCase())
           })
           break
 
         case "intel-cpu-type":
-        case "amd-cpu-type":
-        case "nvidia-chipset":
-        case "amd-chipset":
-        case "intel-chipset":
           matchesFilter = selectedOptions.some((option) => {
-            const optionText = option.toLowerCase().replace(/[-\s]/g, "")
-            const componentText = text.replace(/[-\s]/g, "")
-            return componentText.includes(optionText)
+            // 키워드 기반 매칭 (필터 생성과 동일한 로직)
+            const keywordMap: Record<string, string[]> = {
+              "코어-울트라9s2": ["ultra 9", "울트라9", "core ultra 9"],
+              "코어-울트라7s2": ["ultra 7", "울트라7", "core ultra 7"],
+              "코어-울트라5s2": ["ultra 5", "울트라5", "core ultra 5"],
+              "코어i9-14세대": ["i9 14", "i9-14", "14세대", "14th gen"],
+              "코어i7-14세대": ["i7 14", "i7-14", "14세대", "14th gen"],
+              "코어i5-14세대": ["i5 14", "i5-14", "14세대", "14th gen"],
+              "코어i3-14세대": ["i3 14", "i3-14", "14세대", "14th gen"],
+              "코어i9-13세대": ["i9 13", "i9-13", "13세대", "13th gen"],
+              "코어i7-13세대": ["i7 13", "i7-13", "13세대", "13th gen"],
+              "코어i5-13세대": ["i5 13", "i5-13", "13세대", "13th gen"],
+              "코어i3-13세대": ["i3 13", "i3-13", "13세대", "13th gen"],
+              "코어i9-12세대": ["i9 12", "i9-12", "12세대", "12th gen"],
+              "코어i7-12세대": ["i7 12", "i7-12", "12세대", "12th gen"],
+              "코어i5-12세대": ["i5 12", "i5-12", "12세대", "12th gen"],
+              "코어i3-12세대": ["i3 12", "i3-12", "12세대", "12th gen"],
+              제온: ["xeon", "제온"],
+            }
+
+            const keywords = keywordMap[option] || []
+            return keywords.some((keyword) => text.includes(keyword))
+          })
+          break
+
+        case "amd-cpu-type":
+          matchesFilter = selectedOptions.some((option) => {
+            // AMD 제품인지 먼저 확인
+            const isAmd =
+              text.includes("amd") ||
+              text.includes("ryzen") ||
+              text.includes("라이젠") ||
+              text.includes("epyc") ||
+              text.includes("threadripper") ||
+              text.includes("스레드리퍼") ||
+              text.includes("athlon") ||
+              text.includes("애슬론")
+
+            if (!isAmd) return false
+
+            // 각 옵션별 매칭
+            switch (option) {
+              case "epyc":
+                return text.includes("epyc")
+
+              case "라이젠-스레드리퍼-pro":
+                return text.includes("threadripper pro") || text.includes("스레드리퍼 pro")
+
+              case "라이젠-스레드리퍼":
+                return (text.includes("threadripper") || text.includes("스레드리퍼")) && !text.includes("pro")
+
+              case "애슬론":
+                return text.includes("athlon") || text.includes("애슬론")
+
+              default:
+                // 라이젠 시리즈 처리
+                if (option.startsWith("라이젠")) {
+                  const modelMatch = text.match(/(\d{4})[a-z]*/)
+                  if (!modelMatch) return false
+
+                  const modelNumber = Number.parseInt(modelMatch[1])
+
+                  // 시리즈 확인
+                  const seriesMatch = option.match(/라이젠(\d)-(\d)세대/)
+                  if (!seriesMatch) return false
+
+                  const [, series, generation] = seriesMatch
+
+                  // 시리즈 매칭 확인
+                  const hasCorrectSeries = text.includes(`ryzen ${series}`) || text.includes(`라이젠${series}`)
+
+                  if (!hasCorrectSeries) return false
+
+                  // 세대 매칭 확인 (모델 번호 기반)
+                  let correctGeneration = false
+                  if (generation === "6" && modelNumber >= 9000) correctGeneration = true
+                  else if (generation === "5" && modelNumber >= 7000 && modelNumber < 9000) correctGeneration = true
+                  else if (generation === "4" && modelNumber >= 5000 && modelNumber < 7000) correctGeneration = true
+                  else if (generation === "3" && modelNumber >= 3000 && modelNumber < 5000) correctGeneration = true
+
+                  return correctGeneration
+                }
+
+                return false
+            }
           })
           break
 
@@ -1911,57 +2239,8 @@ export function applyFilters(
           break
 
         case "memory-type":
-        case "memory-capacity":
-        case "clock-speed":
-        case "timing":
-        case "voltage":
           matchesFilter = selectedOptions.some((option) => {
             return text.includes(option.toLowerCase().replace(/[-\s]/g, ""))
-          })
-          break
-
-        case "form-factor":
-        case "interface":
-        case "protocol":
-        case "capacity":
-        case "nand-structure":
-          matchesFilter = selectedOptions.some((option) => {
-            return text.includes(option.toLowerCase())
-          })
-          break
-
-        case "case-type":
-        case "board-support":
-        case "case-size":
-        case "power-support":
-          matchesFilter = selectedOptions.some((option) => {
-            return text.includes(option.toLowerCase())
-          })
-          break
-
-        case "product-type":
-        case "chipset":
-        case "vga-connection":
-          matchesFilter = selectedOptions.some((option) => {
-            return text.includes(option.toLowerCase())
-          })
-          break
-
-        case "cooling-type":
-        case "warranty-period":
-        case "height":
-          matchesFilter = selectedOptions.some((option) => {
-            return text.includes(option.toLowerCase())
-          })
-          break
-
-        case "power-output":
-        case "80plus-certification":
-        case "cable-type":
-        case "eta-certification":
-        case "lambda-certification":
-          matchesFilter = selectedOptions.some((option) => {
-            return text.includes(option.toLowerCase())
           })
           break
 
@@ -2000,4 +2279,8 @@ export function applyFilters(
 
     return true
   })
+
+  console.log("Filter result:", result.length)
+  console.log("=== END APPLY FILTERS DEBUG ===")
+  return result
 }
