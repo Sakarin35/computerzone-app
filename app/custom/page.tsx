@@ -17,28 +17,109 @@ import {
   type ComponentType,
   type ComponentOption,
 } from "@/app/data/components"
-import { fetchCustomComponentData } from "@/lib/custom-data-adapter"
+// 🚀 부품 DB와 같은 캐시 시스템 사용!
+import {
+  fetchComponentsWithEnhancedCache,
+  getEnhancedCacheStats,
+  clearEnhancedCache,
+  type FirebaseComponentData,
+} from "@/lib/firebase-cache-enhanced"
+// 🎯 인기순 정렬 알고리즘 import
+import { sortByPopularity, calculatePopularityScore } from "@/lib/popularity-utils"
 
 type SelectedComponents = Partial<Record<ComponentType, ComponentOption & { description: string }>>
 
-// 애니메이션 변형
+// Firebase 데이터를 커스텀 페이지 형식으로 변환하는 함수 (인기순 정렬 적용)
+function convertFirebaseToCustomFormat(
+  firebaseData: Record<string, FirebaseComponentData[]>,
+): Record<ComponentType, ComponentOption[]> {
+  const customData: Record<ComponentType, ComponentOption[]> = {
+    cpu: [],
+    vga: [],
+    memory: [],
+    ssd: [],
+    mb: [],
+    power: [],
+    case: [],
+    cooler: [],
+  }
+
+  // Firebase 카테고리 이름을 커스텀 형식으로 매핑
+  const categoryMapping: Record<string, ComponentType> = {
+    Cpu: "cpu",
+    CPU: "cpu",
+    cpu: "cpu",
+    Vga: "vga",
+    VGA: "vga",
+    vga: "vga",
+    Memory: "memory",
+    MEMORY: "memory",
+    memory: "memory",
+    SSD: "ssd",
+    Ssd: "ssd",
+    ssd: "ssd",
+    "M.B": "mb",
+    MB: "mb",
+    mb: "mb",
+    Power: "power",
+    POWER: "power",
+    power: "power",
+    Case: "case",
+    CASE: "case",
+    case: "case",
+    Cooler: "cooler",
+    COOLER: "cooler",
+    cooler: "cooler",
+  }
+
+  // Firebase 데이터를 커스텀 형식으로 변환 + 인기순 정렬
+  Object.entries(firebaseData).forEach(([firebaseCategory, components]) => {
+    const customCategory = categoryMapping[firebaseCategory]
+    if (customCategory && components) {
+      console.log(`🔄 [${customCategory}] 인기순 정렬 시작 (${components.length}개 제품)`)
+
+      // 🎯 인기순 정렬 적용
+      const sortedComponents = sortByPopularity(components)
+
+      // 인기도 점수 로그 (상위 5개만)
+      sortedComponents.slice(0, 5).forEach((comp, index) => {
+        const score = calculatePopularityScore(comp)
+        console.log(`🏆 [${customCategory}] ${index + 1}위: ${comp.name} (점수: ${score.toFixed(1)})`)
+      })
+
+      customData[customCategory] = sortedComponents.map((comp) => ({
+        id: comp.id || "",
+        name: comp.name || "",
+        price: comp.price || 0,
+        image: comp.image || "/placeholder.svg",
+        description: comp.description || comp.specs || "상세 정보가 없습니다.",
+        // 🎯 인기도 점수도 포함 (디버깅용)
+        popularityScore: calculatePopularityScore(comp),
+      }))
+    }
+  })
+
+  return customData
+}
+
+// 🎯 성능 최적화된 애니메이션 (duration 단축)
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
+      staggerChildren: 0.01, // 0.05 → 0.01로 단축
     },
   },
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 10 }, // y: 20 → 10으로 단축
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.5,
+      duration: 0.2, // 0.5 → 0.2로 단축
     },
   },
 }
@@ -60,26 +141,62 @@ export default function CustomBuild() {
     case: [],
     cooler: [],
   })
+  const [performanceInfo, setPerformanceInfo] = useState<string>("")
+  const [cacheStats, setCacheStats] = useState<{ memory: number; storage: number; keys: string[] }>({
+    memory: 0,
+    storage: 0,
+    keys: [],
+  })
+  // 🚀 실제 성능 측정 추가
+  const [realLoadingTime, setRealLoadingTime] = useState<string>("")
+  const [pageStartTime] = useState(performance.now())
 
-  // Firebase 데이터 로딩
+  // 캐시 상태 업데이트
+  const updateCacheStats = () => {
+    setCacheStats(getEnhancedCacheStats())
+  }
+
+  // 🎯 실제 페이지 로딩 완료 시간 측정
+  useEffect(() => {
+    if (!loading && componentOptions.vga.length > 0) {
+      const totalTime = performance.now() - pageStartTime
+      setRealLoadingTime(`전체 로딩: ${totalTime.toFixed(0)}ms`)
+      console.log(`🎯 실제 페이지 로딩 완료: ${totalTime.toFixed(0)}ms`)
+    }
+  }, [loading, componentOptions, pageStartTime])
+
+  // Firebase 데이터 로딩 (부품 DB와 같은 캐시 사용!)
   useEffect(() => {
     const loadFirebaseData = async () => {
       try {
         setLoading(true)
-        console.log("🔄 Firebase 데이터 로딩 시작...")
+        setPerformanceInfo("캐시 확인 중...")
 
-        // Firebase 데이터 가져오기
-        const firebaseData = await fetchCustomComponentData()
+        const startTime = performance.now()
+        console.log("🚀 [커스텀] 부품 DB와 같은 캐시 시스템 사용...")
+
+        // 🎯 부품 DB와 동일한 캐시된 함수 사용!
+        const firebaseData = await fetchComponentsWithEnhancedCache()
+
+        const loadTime = performance.now() - startTime
+        setPerformanceInfo(`캐시 로딩: ${loadTime.toFixed(1)}ms`)
 
         // Firebase 데이터가 있는지 확인
         const hasFirebaseData = Object.values(firebaseData).some((arr) => arr.length > 0)
 
         if (hasFirebaseData) {
-          console.log("✅ Firebase 데이터 사용")
-          setComponentOptions(firebaseData)
+          console.log("✅ [커스텀] Firebase 캐시 데이터 사용")
+          // 🎯 Firebase 데이터를 커스텀 형식으로 변환 (인기순 정렬 적용)
+          const convertedData = convertFirebaseToCustomFormat(firebaseData)
+          setComponentOptions(convertedData)
           setDataSource("firebase")
+
+          // 각 카테고리별 제품 수 로그
+          Object.entries(convertedData).forEach(([category, items]) => {
+            console.log(`📦 [커스텀] ${category}: ${items.length}개 제품 (인기순 정렬 완료)`)
+          })
         } else {
-          console.log("⚠️ Firebase 데이터 없음, 로컬 데이터 사용")
+          console.log("⚠️ [커스텀] Firebase 데이터 없음, 로컬 데이터 사용")
           // 로컬 데이터를 안전하게 변환
           const safeLocalData: Record<ComponentType, ComponentOption[]> = {
             cpu: localComponentOptions.cpu ? [...localComponentOptions.cpu] : [],
@@ -93,15 +210,14 @@ export default function CustomBuild() {
           }
           setComponentOptions(safeLocalData)
           setDataSource("local")
+          setPerformanceInfo("로컬 데이터 사용")
         }
 
-        // 각 카테고리별 제품 수 로그
-        Object.entries(componentOptions).forEach(([category, items]) => {
-          console.log(`📦 ${category}: ${items.length}개 제품`)
-        })
+        updateCacheStats()
       } catch (error) {
-        console.error("❌ 데이터 로딩 실패:", error)
+        console.error("❌ [커스텀] 데이터 로딩 실패:", error)
         setDataSource("local")
+        setPerformanceInfo("오류 발생, 로컬 데이터 사용")
         // 로컬 데이터를 안전하게 변환
         const safeLocalData: Record<ComponentType, ComponentOption[]> = {
           cpu: localComponentOptions.cpu ? [...localComponentOptions.cpu] : [],
@@ -182,13 +298,37 @@ export default function CustomBuild() {
     router.push("/")
   }, [router])
 
+  // 캐시 초기화 핸들러
+  const handleClearCache = () => {
+    clearEnhancedCache()
+    updateCacheStats()
+    setPerformanceInfo("캐시 초기화됨")
+    console.log("🗑️ [커스텀] 캐시가 초기화되었습니다")
+  }
+
+  // 🎯 인기순 상위 20개만 표시 (이미 정렬된 데이터에서)
+  const visibleProducts = useMemo(() => {
+    const products = componentOptions[currentComponent] || []
+    // 🏆 이미 인기순으로 정렬된 데이터에서 상위 20개만 선택
+    const top20 = products.slice(0, 20)
+
+    console.log(`🎯 [${currentComponent}] 인기순 상위 20개 표시:`)
+    top20.slice(0, 5).forEach((product, index) => {
+      const score = (product as any).popularityScore || 0
+      console.log(`  ${index + 1}위: ${product.name} (점수: ${score.toFixed(1)})`)
+    })
+
+    return top20
+  }, [componentOptions, currentComponent])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-white" />
           <p className="text-white text-lg">부품 데이터를 불러오는 중...</p>
-          <p className="text-gray-400 text-sm">Firebase에서 최신 부품 정보를 가져오고 있습니다</p>
+          <p className="text-gray-400 text-sm">인기순 알고리즘 적용 중</p>
+          {performanceInfo && <p className="text-blue-400 text-sm">{performanceInfo}</p>}
         </div>
       </div>
     )
@@ -205,8 +345,25 @@ export default function CustomBuild() {
       <motion.div variants={itemVariants} className="border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center h-16 space-x-8">
-            {/* Data source indicator */}
-            
+            {/* 🎯 실제 성능 정보 표시 */}
+            <div className="flex items-center gap-4">
+              {performanceInfo && (
+                <div className="text-sm text-blue-400 bg-blue-900/20 border border-blue-400 px-3 py-1 rounded">
+                  ⚡ {performanceInfo}
+                </div>
+              )}
+              {realLoadingTime && (
+                <div className="text-sm text-green-400 bg-green-900/20 border border-green-400 px-3 py-1 rounded">
+                  🎯 {realLoadingTime}
+                </div>
+              )}
+              <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded">
+                💾 캐시: {cacheStats.memory}개 | 💿 {cacheStats.storage}개
+              </div>
+              <Button onClick={handleClearCache} variant="outline" size="sm">
+                🗑️ 캐시 초기화
+              </Button>
+            </div>
 
             {/* Component selection dropdown */}
             <Sheet>
@@ -305,7 +462,7 @@ export default function CustomBuild() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.5 }}
+                      transition={{ duration: 0.3 }} // 0.5 → 0.3으로 단축
                       className="w-full h-full"
                     >
                       <Image
@@ -313,6 +470,7 @@ export default function CustomBuild() {
                         alt={selectedComponents[currentComponent]?.name}
                         fill
                         className="object-contain p-8"
+                        priority // 🎯 우선 로딩
                       />
                     </motion.div>
                   ) : (
@@ -338,7 +496,7 @@ export default function CustomBuild() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
+                        transition={{ duration: 0.2 }} // 0.3 → 0.2로 단축
                         className="text-gray-400 text-sm leading-relaxed"
                       >
                         {selectedComponents[currentComponent]?.description || "제품을 선택하면 상세 설명이 표시됩니다."}
@@ -350,30 +508,32 @@ export default function CustomBuild() {
             </div>
           </motion.div>
 
-          {/* Component options - 인기순 정렬된 전체 목록 */}
+          {/* Component options - 🏆 인기순 상위 20개 표시 */}
           <motion.div variants={itemVariants} className="col-span-12 md:col-span-4">
             <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">
                   {currentIndex + 1}. {componentNames[currentComponent]}
                 </h2>
-                <div className="text-sm text-gray-400">{componentOptions[currentComponent]?.length || 0}개 제품</div>
+                <div className="text-sm text-gray-400">
+                  상위 {visibleProducts.length}/{componentOptions[currentComponent]?.length || 0}개 제품
+                </div>
               </div>
 
               {dataSource === "firebase" && (
                 <div className="text-sm text-yellow-400 mb-4 flex items-center">
-                  ⭐ 인기순으로 정렬됨 • 스크롤하여 더 많은 제품 확인
+                  🏆 인기순 알고리즘 상위 20개 • 부품 DB 캐시 공유
                 </div>
               )}
 
               <AnimatePresence>
-                {componentOptions[currentComponent]?.map((option, index) => (
+                {visibleProducts.map((option, index) => (
                   <motion.div
                     key={option.id}
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 10 }} // y: 20 → 10으로 단축
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3, delay: index * 0.02 }}
+                    exit={{ opacity: 0, y: -10 }} // y: -20 → -10으로 단축
+                    transition={{ duration: 0.2, delay: index * 0.01 }} // duration 0.3 → 0.2, delay 0.02 → 0.01
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     className={`p-4 rounded-lg cursor-pointer transition-all duration-300 ${
@@ -389,9 +549,16 @@ export default function CustomBuild() {
                         <div className="text-sm text-blue-400 mb-2">+ {option.price?.toLocaleString()}원</div>
                         <p className="text-xs text-gray-500 line-clamp-2">{option.description}</p>
                       </div>
-                      {dataSource === "firebase" && index < 3 && (
-                        <div className="ml-2 text-xs bg-yellow-600 text-white px-2 py-1 rounded">
-                          인기 {index + 1}위
+                      {/* 🏆 인기 순위 표시 (상위 10개) */}
+                      {dataSource === "firebase" && index < 10 && (
+                        <div className="ml-2 flex flex-col items-end gap-1">
+                          <div className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">인기 {index + 1}위</div>
+                          {/* 인기도 점수 표시 (개발 모드에서만) */}
+                          {process.env.NODE_ENV === "development" && (option as any).popularityScore && (
+                            <div className="text-xs text-gray-400">
+                              점수: {((option as any).popularityScore as number).toFixed(1)}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -401,6 +568,21 @@ export default function CustomBuild() {
 
               {componentOptions[currentComponent]?.length === 0 && (
                 <div className="text-center text-gray-400 py-8">이 카테고리에는 아직 제품이 없습니다</div>
+              )}
+
+              {/* 🎯 더보기 버튼 (필요시) */}
+              {componentOptions[currentComponent]?.length > 20 && (
+                <div className="text-center py-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // 부품 DB로 이동하여 전체 목록 보기
+                      router.push(`/parts-db?category=${currentComponent}`)
+                    }}
+                  >
+                    전체 {componentOptions[currentComponent]?.length}개 제품 보기 →
+                  </Button>
+                </div>
               )}
             </div>
           </motion.div>

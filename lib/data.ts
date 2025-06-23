@@ -143,4 +143,3 @@ export const deleteComponent = async (id: string) => {
       console.error('❌ Error deleting component:', error);
     }
   };
-
