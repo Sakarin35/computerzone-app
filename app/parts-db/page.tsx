@@ -9,8 +9,6 @@ import { Button } from "@/components/ui/button"
 import {
   fetchComponentsWithEnhancedCache as fetchComponents,
   fetchComponentsByCategoryWithEnhancedCache as fetchComponentsByCategory,
-  getEnhancedCacheStats,
-  clearEnhancedCache,
   type FirebaseComponentData,
 } from "@/lib/firebase-cache-enhanced"
 import PartsSearch from "@/components/parts-search"
@@ -18,6 +16,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import PartsFilter, { type FilterState } from "@/components/parts-filter"
 import { generateFiltersFromComponents, applyFilters } from "@/lib/filter-utils"
 import { calculatePopularityScore } from "@/lib/popularity-utils"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+
+const ITEMS_PER_PAGE = 30
 
 export default function PartsDB() {
   const router = useRouter()
@@ -33,18 +42,9 @@ export default function PartsDB() {
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<FilterState>({})
   const [availableFilters, setAvailableFilters] = useState<any[]>([])
-  const [cacheStats, setCacheStats] = useState<{ memory: number; storage: number; keys: string[] }>({
-    memory: 0,
-    storage: 0,
-    keys: [],
-  })
   const [loadingStage, setLoadingStage] = useState<string>("")
   const [performanceInfo, setPerformanceInfo] = useState<string>("")
-
-  // 캐시 상태 업데이트
-  const updateCacheStats = () => {
-    setCacheStats(getEnhancedCacheStats())
-  }
+  const [currentPage, setCurrentPage] = useState(1)
 
   // 모든 컴포넌트 로드 함수 (강화된 캐시 적용)
   const loadAllComponents = async () => {
@@ -86,7 +86,6 @@ export default function PartsDB() {
 
       setLoading(false)
       setLoadingStage("")
-      updateCacheStats()
     } catch (error) {
       console.error("Error loading all components:", error)
       setError("부품 데이터를 불러오는 중 오류가 발생했습니다.")
@@ -146,7 +145,6 @@ export default function PartsDB() {
 
         setLoading(false)
         setLoadingStage("")
-        updateCacheStats()
       } catch (error) {
         console.error(`Error loading components for category ${selectedType}:`, error)
         setError(`${selectedType} 카테고리의 부품을 불러오는 중 오류가 발생했습니다.`)
@@ -165,6 +163,11 @@ export default function PartsDB() {
       setAvailableFilters(generatedFilters)
     }
   }, [currentComponents, selectedType])
+
+  // 카테고리나 필터가 변경될 때 첫 페이지로 이동
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedType, filters, searchQuery])
 
   // Filter components based on search query
   const filteredComponents = useMemo(() => {
@@ -207,6 +210,12 @@ export default function PartsDB() {
 
     return filtered
   }, [currentComponents, searchQuery, sortOption, filters, selectedType])
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredComponents.length / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const endIndex = startIndex + ITEMS_PER_PAGE
+  const currentPageComponents = filteredComponents.slice(startIndex, endIndex)
 
   // Handle component selection
   const handleComponentSelect = (component: FirebaseComponentData) => {
@@ -263,12 +272,11 @@ export default function PartsDB() {
     setSortOption(option)
   }
 
-  // 캐시 초기화 핸들러
-  const handleClearCache = () => {
-    clearEnhancedCache()
-    updateCacheStats()
-    setPerformanceInfo("캐시 초기화됨")
-    console.log("🗑️ 강화된 캐시가 초기화되었습니다")
+  // 페이지 변경 핸들러
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    // 페이지 변경 시 상단으로 스크롤
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   // Format category name for display
@@ -316,24 +324,7 @@ export default function PartsDB() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">부품 DB</h1>
-          <div className="flex items-center gap-4">
-            {/* 성능 정보 */}
-            {performanceInfo && (
-              <div className="text-sm text-blue-400 bg-blue-900/20 border border-blue-400 px-3 py-1 rounded">
-                ⚡ {performanceInfo}
-              </div>
-            )}
-            {/* 캐시 상태 표시 */}
-            <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded">
-              💾 메모리: {cacheStats.memory}개 | 💿 스토리지: {cacheStats.storage}개
-            </div>
-            <Button onClick={handleClearCache} variant="outline" size="sm">
-              🗑️ 캐시 초기화
-            </Button>
-            <Button onClick={loadAllComponents} variant="outline" size="sm">
-              🔄 새로고침
-            </Button>
-          </div>
+          
         </div>
 
         {error && (
@@ -393,14 +384,22 @@ export default function PartsDB() {
           </div>
         </div>
 
-        {/* Search results info */}
-        {searchQuery && (
-          <div className="mb-4 text-gray-300">
+        {/* Results info with pagination */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+          <div className="text-gray-300 mb-4 md:mb-0">
             <p>
-              검색 결과: {filteredComponents.length}개의 부품 {searchQuery && `"${searchQuery}" 검색`}
+              전체 {filteredComponents.length}개 중 {startIndex + 1}-{Math.min(endIndex, filteredComponents.length)}개
+              표시
+              {searchQuery && ` ("${searchQuery}" 검색 결과)`}
             </p>
           </div>
-        )}
+
+          {totalPages > 1 && (
+            <div className="text-sm text-gray-400">
+              페이지 {currentPage} / {totalPages}
+            </div>
+          )}
+        </div>
 
         {/* Loading indicator */}
         {loading && (
@@ -412,11 +411,11 @@ export default function PartsDB() {
           </div>
         )}
 
-        {/* Component list */}
+        {/* Component list - 현재 페이지만 렌더링 */}
         {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredComponents.length > 0 ? (
-              filteredComponents.map((component) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+            {currentPageComponents.length > 0 ? (
+              currentPageComponents.map((component) => (
                 <Card
                   key={component.id}
                   className="bg-gray-950 border-gray-800 cursor-pointer transition-transform hover:scale-105"
@@ -452,15 +451,84 @@ export default function PartsDB() {
               ))
             ) : (
               <div className="col-span-full text-center py-12">
-                <p className="text-xl text-gray-400">이 카테고리에 부품이 없습니다.</p>
+                <p className="text-xl text-gray-400">
+                  {searchQuery ? "검색 결과가 없습니다." : "이 카테고리에 부품이 없습니다."}
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {!loading && filteredComponents.length === 0 && searchQuery && (
-          <div className="text-center py-12">
-            <p className="text-xl text-gray-400">검색 결과가 없습니다.</p>
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <div className="flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+
+                {/* 첫 페이지 */}
+                {currentPage > 3 && (
+                  <>
+                    <PaginationItem>
+                      <PaginationLink onClick={() => handlePageChange(1)} className="cursor-pointer">
+                        1
+                      </PaginationLink>
+                    </PaginationItem>
+                    {currentPage > 4 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+                  </>
+                )}
+
+                {/* 현재 페이지 주변 */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i
+                  if (pageNum > totalPages) return null
+
+                  return (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        onClick={() => handlePageChange(pageNum)}
+                        isActive={pageNum === currentPage}
+                        className="cursor-pointer"
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  )
+                })}
+
+                {/* 마지막 페이지 */}
+                {currentPage < totalPages - 2 && (
+                  <>
+                    {currentPage < totalPages - 3 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+                    <PaginationItem>
+                      <PaginationLink onClick={() => handlePageChange(totalPages)} className="cursor-pointer">
+                        {totalPages}
+                      </PaginationLink>
+                    </PaginationItem>
+                  </>
+                )}
+
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
+                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
       </div>
