@@ -4,8 +4,6 @@ import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Button } from "@/components/ui/button"
 import {
   fetchComponentsWithEnhancedCache as fetchComponents,
   fetchComponentsByCategoryWithEnhancedCache as fetchComponentsByCategory,
@@ -26,7 +24,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 
-const ITEMS_PER_PAGE = 30
+const ITEMS_PER_PAGE = 20
 
 export default function PartsDB() {
   const router = useRouter()
@@ -45,6 +43,7 @@ export default function PartsDB() {
   const [loadingStage, setLoadingStage] = useState<string>("")
   const [performanceInfo, setPerformanceInfo] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
+  const [hoveredComponent, setHoveredComponent] = useState<string | null>(null)
 
   // 모든 컴포넌트 로드 함수 (강화된 캐시 적용)
   const loadAllComponents = async () => {
@@ -279,6 +278,12 @@ export default function PartsDB() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
+  // 툴팁 위치 계산 함수
+  const getTooltipPosition = (index: number) => {
+    const isRightColumn = (index + 1) % 3 === 0 // 3열 기준으로 오른쪽 끝인지 확인
+    return isRightColumn ? "left" : "right"
+  }
+
   // Format category name for display
   const formatCategoryName = (category: string): string => {
     const categoryMap: Record<string, string> = {
@@ -324,7 +329,6 @@ export default function PartsDB() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">부품 DB</h1>
-          
         </div>
 
         {error && (
@@ -413,41 +417,103 @@ export default function PartsDB() {
 
         {/* Component list - 현재 페이지만 렌더링 */}
         {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mb-8">
             {currentPageComponents.length > 0 ? (
-              currentPageComponents.map((component) => (
-                <Card
+              currentPageComponents.map((component, index) => (
+                <div
                   key={component.id}
-                  className="bg-gray-950 border-gray-800 cursor-pointer transition-transform hover:scale-105"
-                  onClick={() => handleComponentSelect(component)}
+                  className="relative"
+                  onMouseEnter={() => setHoveredComponent(component.id)}
+                  onMouseLeave={() => setHoveredComponent(null)}
                 >
-                  <CardContent className="p-6">
-                    <div className="w-full h-48 relative mb-4">
-                      <Image
-                        src={component.image || "/placeholder.svg"}
-                        alt={component.name || "부품 이미지"}
-                        width={200}
-                        height={200}
-                        className="object-contain w-full h-full"
-                        loading="lazy"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.src = "/placeholder.svg"
-                        }}
+                  <Card
+                    className="bg-gray-950 border-gray-800 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-gray-600"
+                    onClick={() => handleComponentSelect(component)}
+                  >
+                    <CardContent className="p-8">
+                      {/* 더 큰 이미지 영역 */}
+                      <div className="w-full h-80 relative mb-6">
+                        <Image
+                          src={component.image || "/placeholder.svg"}
+                          alt={component.name || "부품 이미지"}
+                          width={300}
+                          height={300}
+                          className="object-contain w-full h-full"
+                          priority={index < 6} // 첫 6개 이미지는 우선 로딩
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement
+                            target.src = "/placeholder.svg"
+                          }}
+                        />
+                      </div>
+
+                      {/* 제품명과 가격만 표시 */}
+                      <div className="text-center">
+                        <h3 className="text-xl font-semibold mb-3 text-white line-clamp-2 min-h-[3.5rem]">
+                          {component.name}
+                        </h3>
+                        <p className="text-2xl font-bold text-blue-400">{component.price?.toLocaleString()}원</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 더 큰 툴팁 */}
+                  {hoveredComponent === component.id && (
+                    <div
+                      className={`absolute top-4 z-50 w-96 max-w-md bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-6 transition-all duration-200 ${
+                        getTooltipPosition(index) === "right" ? "left-full ml-4" : "right-full mr-4"
+                      }`}
+                      style={{
+                        animation: "fadeIn 0.2s ease-out",
+                      }}
+                    >
+                      {/* 툴팁 화살표 */}
+                      <div
+                        className={`absolute top-8 w-0 h-0 border-t-8 border-b-8 border-t-transparent border-b-transparent ${
+                          getTooltipPosition(index) === "right"
+                            ? "left-0 -ml-2 border-r-8 border-r-gray-900"
+                            : "right-0 -mr-2 border-l-8 border-l-gray-900"
+                        }`}
                       />
+
+                      <div className="space-y-4">
+                        <h4 className="font-semibold text-white text-lg border-b border-gray-700 pb-3">
+                          {component.name}
+                        </h4>
+
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-400 text-sm">가격:</span>
+                            <span className="text-blue-400 font-bold text-lg">
+                              {component.price?.toLocaleString()}원
+                            </span>
+                          </div>
+
+                          {component.category && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-400 text-sm">카테고리:</span>
+                              <span className="text-white text-sm">{formatCategoryName(component.category)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 상세 설명 - 더 큰 영역 */}
+                        <div className="border-t border-gray-700 pt-4">
+                          <h5 className="text-gray-400 text-sm mb-2">상세 정보:</h5>
+                          <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                            <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                              {component.specs || component.description || "상세 정보가 없습니다."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-gray-500 text-center pt-3 border-t border-gray-700">
+                          클릭하여 선택하기
+                        </div>
+                      </div>
                     </div>
-                    <div className="mb-2">
-                      <h3 className="text-xl font-semibold text-white">{component.name}</h3>
-                      <p className="text-sm text-gray-400">{formatCategoryName(component.category || "")}</p>
-                    </div>
-                    <p className="text-2xl font-bold text-white mb-4">{component.price?.toLocaleString()}원</p>
-                    <ScrollArea className="h-[150px] mb-4">
-                      <p className="text-sm text-gray-200 leading-relaxed">
-                        {component.specs || component.description || "상세 정보가 없습니다."}
-                      </p>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
               ))
             ) : (
               <div className="col-span-full text-center py-12">
@@ -532,6 +598,44 @@ export default function PartsDB() {
           </div>
         )}
       </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #374151;
+          border-radius: 3px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #6b7280;
+          border-radius: 3px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
+        }
+      `}</style>
     </div>
   )
 }

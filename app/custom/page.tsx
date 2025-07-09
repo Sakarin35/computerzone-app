@@ -16,12 +16,11 @@ import {
   type ComponentType,
   type ComponentOption,
 } from "@/app/data/components"
-import { fetchComponentsWithEnhancedCache, type FirebaseComponentData } from "@/lib/firebase-cache-enhanced"
-import { sortByPopularity, calculatePopularityScore } from "@/lib/popularity-utils"
+import { fetchComponents, type FirebaseComponentData } from "@/lib/fetch-components"
 
 type SelectedComponents = Partial<Record<ComponentType, ComponentOption & { description: string }>>
 
-// Firebase 데이터를 커스텀 페이지 형식으로 변환하는 함수 (인기순 정렬 적용)
+// Firebase 데이터를 커스텀 페이지 형식으로 변환하는 함수 (추천순 10개)
 function convertFirebaseToCustomFormat(
   firebaseData: Record<string, FirebaseComponentData[]>,
 ): Record<ComponentType, ComponentOption[]> {
@@ -64,29 +63,45 @@ function convertFirebaseToCustomFormat(
     cooler: "cooler",
   }
 
-  // Firebase 데이터를 커스텀 형식으로 변환 + 인기순 정렬
+  // Firebase 데이터를 커스텀 형식으로 변환 (추천순 10개만)
   Object.entries(firebaseData).forEach(([firebaseCategory, components]) => {
     const customCategory = categoryMapping[firebaseCategory]
     if (customCategory && components) {
-      console.log(`🔄 [${customCategory}] 인기순 정렬 시작 (${components.length}개 제품)`)
+      console.log(`🔄 [${customCategory}] 추천순 10개 선별 시작 (${components.length}개 제품)`)
 
-      // 🎯 인기순 정렬 적용
-      const sortedComponents = sortByPopularity(components)
+      // 추천순 정렬 (가격, 이름 등을 기준으로 간단한 추천 알고리즘)
+      const sortedComponents = components
+        .filter((comp) => comp.name && comp.price) // 유효한 데이터만
+        .sort((a, b) => {
+          // 1. 가격대별 균형 (너무 비싸지 않고 너무 싸지 않은 것 우선)
+          const priceScoreA = Math.abs(a.price - 500000) // 50만원 기준
+          const priceScoreB = Math.abs(b.price - 500000)
 
-      // 인기도 점수 로그 (상위 5개만)
-      sortedComponents.slice(0, 5).forEach((comp, index) => {
-        const score = calculatePopularityScore(comp)
-        console.log(`🏆 [${customCategory}] ${index + 1}위: ${comp.name} (점수: ${score.toFixed(1)})`)
-      })
+          // 2. 이름 길이 (상세한 설명이 있는 제품 우선)
+          const nameScoreA = a.name.length
+          const nameScoreB = b.name.length
 
-      customData[customCategory] = sortedComponents.map((comp) => ({
+          // 3. 설명 유무
+          const descScoreA = a.description || a.specs ? 100 : 0
+          const descScoreB = b.description || b.specs ? 100 : 0
+
+          const totalScoreA = nameScoreA + descScoreA - priceScoreA / 10000
+          const totalScoreB = nameScoreB + descScoreB - priceScoreB / 10000
+
+          return totalScoreB - totalScoreA
+        })
+        .slice(0, 10) // 상위 10개만
+
+      customData[customCategory] = sortedComponents.map((comp, index) => ({
         id: comp.id || "",
         name: comp.name || "",
         price: comp.price || 0,
         image: comp.image || "/placeholder.svg",
         description: comp.description || comp.specs || "상세 정보가 없습니다.",
-        popularityScore: calculatePopularityScore(comp),
+        rank: index + 1, // 추천 순위 추가
       }))
+
+      console.log(`✅ [${customCategory}] 추천순 상위 10개 선별 완료`)
     }
   })
 
@@ -132,7 +147,6 @@ function PremiumLoading({ progress }: { progress: number }) {
                 transition={{ duration: 0.3, ease: "easeOut" }}
               />
             </div>
-
             {/* Progress Glow Effect */}
             <motion.div
               className="absolute top-0 h-[2px] bg-white rounded-full blur-sm opacity-60"
@@ -152,7 +166,6 @@ function PremiumLoading({ progress }: { progress: number }) {
             >
               {Math.floor(progress)}%
             </motion.span>
-
             <span className="text-sm text-gray-500 tracking-wider">LOADING</span>
           </div>
         </motion.div>
@@ -165,7 +178,7 @@ function PremiumLoading({ progress }: { progress: number }) {
           className="mt-12 text-center"
         >
           <div className="flex items-center justify-center space-x-1">
-            {["부", "품", " ", "데", "이", "터", " ", "로", "딩", " ", "중"].map((char, index) => (
+            {["추", "천", " ", "제", "품", " ", "로", "딩", " ", "중"].map((char, index) => (
               <motion.span
                 key={index}
                 initial={{ opacity: 0.3 }}
@@ -195,22 +208,26 @@ function PremiumLoading({ progress }: { progress: number }) {
 
 // 성능 최적화된 애니메이션
 const containerVariants = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 0, x: -50 },
   visible: {
     opacity: 1,
+    x: 0,
     transition: {
-      staggerChildren: 0.01,
+      duration: 0.6,
+      ease: "easeOut",
+      staggerChildren: 0.1,
     },
   },
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
+  hidden: { opacity: 0, x: -30 },
   visible: {
     opacity: 1,
-    y: 0,
+    x: 0,
     transition: {
-      duration: 0.2,
+      duration: 0.5,
+      ease: "easeOut",
     },
   },
 }
@@ -238,14 +255,13 @@ export default function CustomBuild() {
   const startTimeRef = useRef<number>(Date.now())
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  // 로딩 진행률 애니메이션 - 완전히 새로 작성
+  // 로딩 진행률 애니메이션
   useEffect(() => {
     const targetTime = 2000 // 2초 목표
     startTimeRef.current = Date.now()
 
     const updateProgress = () => {
       const elapsed = Date.now() - startTimeRef.current
-
       if (!dataLoaded) {
         // 데이터 로딩 중일 때는 70%까지만 (2초 동안)
         const progress = Math.min((elapsed / targetTime) * 70, 70)
@@ -283,30 +299,28 @@ export default function CustomBuild() {
   useEffect(() => {
     const loadFirebaseData = async () => {
       try {
-        console.log("🚀 [커스텀] 부품 데이터 로딩 시작...")
-
-        const firebaseData = await fetchComponentsWithEnhancedCache()
+        console.log("🚀 [커스텀] 추천 제품 데이터 로딩 시작...")
+        const firebaseData = await fetchComponents()
         const hasFirebaseData = Object.values(firebaseData).some((arr) => arr.length > 0)
 
         if (hasFirebaseData) {
-          console.log("✅ [커스텀] Firebase 캐시 데이터 사용")
+          console.log("✅ [커스텀] Firebase 데이터 사용")
           const convertedData = convertFirebaseToCustomFormat(firebaseData)
           setComponentOptions(convertedData)
-
           Object.entries(convertedData).forEach(([category, items]) => {
-            console.log(`📦 [커스텀] ${category}: ${items.length}개 제품 (인기순 정렬 완료)`)
+            console.log(`📦 [커스텀] ${category}: 추천 ${items.length}개 제품`)
           })
         } else {
           console.log("⚠️ [커스텀] Firebase 데이터 없음, 로컬 데이터 사용")
           const safeLocalData: Record<ComponentType, ComponentOption[]> = {
-            cpu: localComponentOptions.cpu ? [...localComponentOptions.cpu] : [],
-            vga: localComponentOptions.vga ? [...localComponentOptions.vga] : [],
-            memory: localComponentOptions.memory ? [...localComponentOptions.memory] : [],
-            ssd: localComponentOptions.ssd ? [...localComponentOptions.ssd] : [],
-            mb: localComponentOptions.mb ? [...localComponentOptions.mb] : [],
-            power: localComponentOptions.power ? [...localComponentOptions.power] : [],
-            case: localComponentOptions.case ? [...localComponentOptions.case] : [],
-            cooler: localComponentOptions.cooler ? [...localComponentOptions.cooler] : [],
+            cpu: localComponentOptions.cpu ? localComponentOptions.cpu.slice(0, 10) : [],
+            vga: localComponentOptions.vga ? localComponentOptions.vga.slice(0, 10) : [],
+            memory: localComponentOptions.memory ? localComponentOptions.memory.slice(0, 10) : [],
+            ssd: localComponentOptions.ssd ? localComponentOptions.ssd.slice(0, 10) : [],
+            mb: localComponentOptions.mb ? localComponentOptions.mb.slice(0, 10) : [],
+            power: localComponentOptions.power ? localComponentOptions.power.slice(0, 10) : [],
+            case: localComponentOptions.case ? localComponentOptions.case.slice(0, 10) : [],
+            cooler: localComponentOptions.cooler ? localComponentOptions.cooler.slice(0, 10) : [],
           }
           setComponentOptions(safeLocalData)
         }
@@ -315,16 +329,16 @@ export default function CustomBuild() {
         setDataLoaded(true)
       } catch (error) {
         console.error("❌ [커스텀] 데이터 로딩 실패:", error)
-        // 로컬 데이터로 폴백
+        // 로컬 데이터로 폴백 (10개로 제한)
         const safeLocalData: Record<ComponentType, ComponentOption[]> = {
-          cpu: localComponentOptions.cpu ? [...localComponentOptions.cpu] : [],
-          vga: localComponentOptions.vga ? [...localComponentOptions.vga] : [],
-          memory: localComponentOptions.memory ? [...localComponentOptions.memory] : [],
-          ssd: localComponentOptions.ssd ? [...localComponentOptions.ssd] : [],
-          mb: localComponentOptions.mb ? [...localComponentOptions.mb] : [],
-          power: localComponentOptions.power ? [...localComponentOptions.power] : [],
-          case: localComponentOptions.case ? [...localComponentOptions.case] : [],
-          cooler: localComponentOptions.cooler ? [...localComponentOptions.cooler] : [],
+          cpu: localComponentOptions.cpu ? localComponentOptions.cpu.slice(0, 10) : [],
+          vga: localComponentOptions.vga ? localComponentOptions.vga.slice(0, 10) : [],
+          memory: localComponentOptions.memory ? localComponentOptions.memory.slice(0, 10) : [],
+          ssd: localComponentOptions.ssd ? localComponentOptions.ssd.slice(0, 10) : [],
+          mb: localComponentOptions.mb ? localComponentOptions.mb.slice(0, 10) : [],
+          power: localComponentOptions.power ? localComponentOptions.power.slice(0, 10) : [],
+          case: localComponentOptions.case ? localComponentOptions.case.slice(0, 10) : [],
+          cooler: localComponentOptions.cooler ? localComponentOptions.cooler.slice(0, 10) : [],
         }
         setComponentOptions(safeLocalData)
         setDataLoaded(true)
@@ -393,18 +407,11 @@ export default function CustomBuild() {
     router.push("/")
   }, [router])
 
-  // 인기순 상위 20개만 표시
-  const visibleProducts = useMemo(() => {
+  // 추천 상위 10개 제품
+  const recommendedProducts = useMemo(() => {
     const products = componentOptions[currentComponent] || []
-    const top20 = products.slice(0, 20)
-
-    console.log(`🎯 [${currentComponent}] 인기순 상위 20개 표시:`)
-    top20.slice(0, 5).forEach((product, index) => {
-      const score = (product as any).popularityScore || 0
-      console.log(`  ${index + 1}위: ${product.name} (점수: ${score.toFixed(1)})`)
-    })
-
-    return top20
+    console.log(`🎯 [${currentComponent}] 추천 상위 10개 표시: ${products.length}개`)
+    return products
   }, [componentOptions, currentComponent])
 
   // 🎯 로딩 중일 때 제네시스 스타일 애니메이션 표시
@@ -488,7 +495,10 @@ export default function CustomBuild() {
               return (
                 <motion.div
                   key={comp}
-                  whileHover={{ scale: 1.02 }}
+                  initial={{ opacity: 0, x: -30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ scale: 1.02, x: 5 }}
                   whileTap={{ scale: 0.98 }}
                   className="bg-gray-900 p-4 rounded-lg cursor-pointer hover:bg-gray-800 transition-all duration-300"
                   onClick={() => setCurrentComponent(comp as ComponentType)}
@@ -512,22 +522,23 @@ export default function CustomBuild() {
           {/* Current component display */}
           <motion.div variants={itemVariants} className="col-span-12 md:col-span-5">
             <div className="space-y-6">
-              <div className="aspect-square relative bg-gray-900 rounded-lg overflow-hidden">
+              {/* Product Image - 더 작게 조정 */}
+              <div className="aspect-[4/3] relative bg-gray-900 rounded-lg overflow-hidden">
                 <AnimatePresence mode="wait">
                   {selectedComponents[currentComponent] ? (
                     <motion.div
                       key={selectedComponents[currentComponent]?.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
                       transition={{ duration: 0.3 }}
                       className="w-full h-full"
                     >
                       <Image
                         src={selectedComponents[currentComponent]?.image || "/placeholder.svg"}
-                        alt={selectedComponents[currentComponent]?.name}
+                        alt={selectedComponents[currentComponent]?.name || ""}
                         fill
-                        className="object-contain p-8"
+                        className="object-contain p-6"
                         priority
                       />
                     </motion.div>
@@ -543,52 +554,96 @@ export default function CustomBuild() {
                 </AnimatePresence>
               </div>
 
-              {/* Description Card */}
+              {/* Description Card - 더 크게 조정 */}
               <Card className="bg-gray-900 border-gray-800 text-white">
                 <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold mb-2">제품 설명</h3>
-                  <ScrollArea className="h-[120px]">
-                    <AnimatePresence mode="wait">
-                      <motion.p
-                        key={selectedComponents[currentComponent]?.id || "empty"}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="text-gray-400 text-sm leading-relaxed"
-                      >
-                        {selectedComponents[currentComponent]?.description || "제품을 선택하면 상세 설명이 표시됩니다."}
-                      </motion.p>
-                    </AnimatePresence>
-                  </ScrollArea>
+                  <h3 className="text-xl font-semibold mb-4">제품 상세 정보</h3>
+
+                  {/* 선택된 제품 이름과 가격 */}
+                  {selectedComponents[currentComponent] && (
+                    <div className="mb-4 pb-4 border-b border-gray-700">
+                      <h4 className="text-lg font-medium text-white mb-2">
+                        {selectedComponents[currentComponent]?.name}
+                      </h4>
+                      <div className="text-xl font-bold text-blue-400">
+                        {selectedComponents[currentComponent]?.price?.toLocaleString()}원
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 제품 설명 - 더 큰 영역 */}
+                  <div className="mb-3">
+                    <h5 className="text-sm font-medium text-gray-300 mb-2">제품 설명</h5>
+                    <ScrollArea className="h-[300px]">
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={selectedComponents[currentComponent]?.id || "empty"}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="text-gray-400 text-sm leading-relaxed space-y-3"
+                        >
+                          {selectedComponents[currentComponent] ? (
+                            <div className="space-y-4">
+                              {/* 주요 설명 */}
+                              <div>
+                                <p className="whitespace-pre-wrap">
+                                  {selectedComponents[currentComponent]?.description || "상세 설명이 없습니다."}
+                                </p>
+                              </div>
+
+                              {/* 구분선 */}
+                              <div className="border-t border-gray-700 pt-4">
+                                <h6 className="text-xs font-medium text-gray-300 mb-2">카테고리 정보</h6>
+                                <p className="text-xs text-gray-500">{componentNames[currentComponent]} • 추천 제품</p>
+                              </div>
+
+                              {/* 추가 정보 영역 */}
+                              <div className="bg-gray-800/50 p-4 rounded-lg">
+                                <h6 className="text-xs font-medium text-gray-300 mb-2">구매 가이드</h6>
+                                <p className="text-xs text-gray-400 leading-relaxed">
+                                  이 제품은 현재 카테고리에서 추천하는 제품입니다. 성능과 가격을 종합적으로 고려하여
+                                  선별된 제품으로, 안정적인 PC 구성에 적합합니다.
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <p className="text-gray-500 mb-4">제품을 선택하면 상세 정보가 표시됩니다.</p>
+                              <div className="text-xs text-gray-600">오른쪽 목록에서 원하는 제품을 클릭해보세요.</div>
+                            </div>
+                          )}
+                        </motion.div>
+                      </AnimatePresence>
+                    </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </motion.div>
 
-          {/* Component options - 인기순 상위 20개 표시 */}
+          {/* Component options - 추천 상위 10개 표시 */}
           <motion.div variants={itemVariants} className="col-span-12 md:col-span-4">
             <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">
                   {currentIndex + 1}. {componentNames[currentComponent]}
                 </h2>
-                <div className="text-sm text-gray-400">
-                  상위 {visibleProducts.length}/{componentOptions[currentComponent]?.length || 0}개 제품
-                </div>
+                <div className="text-sm text-gray-400">추천 {recommendedProducts.length}개</div>
               </div>
 
-              <div className="text-sm text-yellow-400 mb-4 flex items-center">🏆 인기순 알고리즘 상위 20개</div>
+              <div className="text-sm text-yellow-400 mb-4 flex items-center">🏆 추천 상위 10개 제품</div>
 
               <AnimatePresence>
-                {visibleProducts.map((option, index) => (
+                {recommendedProducts.map((option, index) => (
                   <motion.div
                     key={option.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2, delay: index * 0.01 }}
-                    whileHover={{ scale: 1.02 }}
+                    initial={{ opacity: 0, x: 30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -30 }}
+                    transition={{ duration: 0.3, delay: index * 0.02 }}
+                    whileHover={{ scale: 1.02, x: -5 }}
                     whileTap={{ scale: 0.98 }}
                     className={`p-4 rounded-lg cursor-pointer transition-all duration-300 ${
                       selectedComponents[currentComponent]?.id === option.id
@@ -603,35 +658,31 @@ export default function CustomBuild() {
                         <div className="text-sm text-blue-400 mb-2">+ {option.price?.toLocaleString()}원</div>
                         <p className="text-xs text-gray-500 line-clamp-2">{option.description}</p>
                       </div>
-
-                      {/* 인기 순위 표시 (상위 10개) */}
-                      {index < 10 && (
-                        <div className="ml-2 flex flex-col items-end gap-1">
-                          <div className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">인기 {index + 1}위</div>
-                        </div>
-                      )}
+                      {/* 추천 순위 표시 */}
+                      <div className="ml-2 flex flex-col items-end gap-1">
+                        <div className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">추천 {index + 1}위</div>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
 
-              {componentOptions[currentComponent]?.length === 0 && (
+              {recommendedProducts.length === 0 && (
                 <div className="text-center text-gray-400 py-8">이 카테고리에는 아직 제품이 없습니다</div>
               )}
 
               {/* 더보기 버튼 */}
-              {componentOptions[currentComponent]?.length > 20 && (
-                <div className="text-center py-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      router.push(`/parts-db?category=${currentComponent}`)
-                    }}
-                  >
-                    전체 {componentOptions[currentComponent]?.length}개 제품 보기 →
-                  </Button>
-                </div>
-              )}
+              <div className="text-center py-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    router.push(`/parts-db?category=${currentComponent}`)
+                  }}
+                  className="bg-transparent text-white border-white hover:bg-gray-800"
+                >
+                  전체 제품 보기 →
+                </Button>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -644,7 +695,6 @@ export default function CustomBuild() {
           <div className="text-xl font-bold">
             예상 가격: <span className="text-blue-400">{totalPrice.toLocaleString()}원</span>
           </div>
-
           <div className="flex space-x-4">
             <Button
               onClick={goToPrev}
@@ -655,8 +705,7 @@ export default function CustomBuild() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               이전
             </Button>
-
-            <Button onClick={goToNext} className="px-8 gradient-hover-button">
+            <Button onClick={goToNext} className="px-8 bg-blue-600 hover:bg-blue-700 text-white">
               {currentComponent === "power" ? "견적서 보기" : "다음"}
               {currentComponent !== "power" && <ChevronRight className="ml-2 h-4 w-4" />}
             </Button>
